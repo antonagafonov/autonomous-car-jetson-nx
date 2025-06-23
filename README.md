@@ -7,6 +7,9 @@
 
 A comprehensive autonomous car project built with ROS2 Foxy on NVIDIA Jetson Xavier NX. Features real-time joystick control, differential drive motor control, and expandable architecture for autonomous navigation capabilities.
 
+![Autonomous Car](images/3.jpeg)
+*The completed autonomous car with Jetson Xavier NX, 4-motor differential drive, and Bluetooth joystick control*
+
 ## 🎯 Project Overview
 
 This project transforms a basic RC car into an intelligent autonomous vehicle using:
