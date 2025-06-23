@@ -1,5 +1,4 @@
-# 🚗 Autonomous Car Project 
-# Jetson Xavier NX - ROS2 - Pytorch
+# 🚗 Autonomous Car Project - Jetson Xavier NX
 
 ![ROS2](https://img.shields.io/badge/ROS2-Foxy-blue)
 ![Platform](https://img.shields.io/badge/Platform-Jetson%20Xavier%20NX-green)
@@ -20,10 +19,12 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 ## ✨ Features
 
 - ✅ **Manual Control**: Bluetooth joystick teleoperation with Xbox/PS4 controller support
-- ✅ **Motor Control**: Precise PWM-based differential drive control
-- ✅ **Safety Systems**: Emergency stop, speed limiting, and mode switching
+- ✅ **Motor Control**: Precise PWM-based differential drive control with 4-motor setup
+- ✅ **One-Command Launch**: Complete system startup with single launch file
+- ✅ **Safety Systems**: Emergency stop, speed limiting, and mode switching with minimum speed threshold
 - ✅ **Real-time Performance**: Low-latency control loop for responsive driving
 - ✅ **Modular Architecture**: Clean ROS2 package structure for easy expansion
+- ✅ **PWM Configuration**: Hardware PWM on both motor sides with device tree optimization
 - 🚧 **Camera Integration**: CSI camera support (planned)
 - 🚧 **Lane Detection**: OpenCV-based computer vision (planned)
 - 🚧 **Autonomous Navigation**: PID control and path planning (planned)
@@ -32,7 +33,7 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 
 ### Core Components
 - **NVIDIA Jetson Xavier NX** Developer Kit
-- **Dual DC Motors** with H-bridge motor driver
+- **4 DC Motors** (2 per side) with H-bridge motor drivers
 - **Bluetooth Joystick** (Xbox One, PS4, or compatible)
 - **Power Supply** (12V for motors, 5V for Jetson)
 
@@ -48,12 +49,12 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 
 | Component | Pin | Function |
 |-----------|-----|----------|
-| **Motor A (Left)** | 18, 16 | Direction Control |
-| | 33 | PWM Speed Control |
-| **Motor B (Right)** | 37, 35 | Direction Control |
+| **Left Side Motors** | 18, 16 | Direction Control |
+| | 15 | PWM Speed Control |
+| **Right Side Motors** | 35, 37 | Direction Control |
 | | 32 | PWM Speed Control |
 
-> **Note**: Pins 33 and 32 are hardware PWM-capable pins on the Jetson Xavier NX
+> **Note**: Pins 15 and 32 are hardware PWM-capable pins on the Jetson Xavier NX. Enable PWM in device tree with `sudo /opt/nvidia/jetson-io/jetson-io.py`
 
 ## 🚀 Installation
 
@@ -74,9 +75,13 @@ sudo apt install python3-rpi.gpio
 sudo apt install python3-colcon-common-extensions
 ```
 
-### Setup GPIO Permissions
+### Setup GPIO and PWM Configuration
 
 ```bash
+# Enable PWM pins in device tree
+sudo /opt/nvidia/jetson-io/jetson-io.py
+# Select "Configure for compatible hardware" and enable all PWM functions
+
 # Add user to GPIO group
 sudo usermod -a -G gpio $USER
 
@@ -105,9 +110,26 @@ source install/setup.bash
 echo "source ~/car_ws/install/setup.bash" >> ~/.bashrc
 ```
 
-## 🎮 Usage
+## 🚀 Usage
 
-### Quick Start - Manual Control
+### Quick Start - One Command Launch
+
+**Launch entire system:**
+```bash
+source ~/car_ws/install/setup.bash
+ros2 launch car_bringup car_manual_control.launch.py
+```
+
+**Launch with custom parameters:**
+```bash
+# Conservative settings for testing
+ros2 launch car_bringup car_manual_control.launch.py max_linear_speed:=0.5 base_speed_scale:=40
+
+# Performance settings
+ros2 launch car_bringup car_manual_control.launch.py max_linear_speed:=0.8 base_speed_scale:=80
+```
+
+### Manual Launch (Individual Nodes)
 
 **Terminal 1: Motor Controller**
 ```bash
@@ -137,11 +159,11 @@ ros2 run car_teleop cmd_relay
 
 | Control | Action | Description |
 |---------|--------|-------------|
-| **Left Stick ↕** | Forward/Backward | Move car forward or reverse |
+| **Left Stick ↕** | Forward/Backward | Move car forward or reverse (min 0.4 m/s) |
 | **Left Stick ↔** | Turn Left/Right | Steer the car |
 | **A Button** | Mode Toggle | Switch between manual/autonomous |
 | **B Button** | Emergency Stop | Immediate stop with toggle |
-| **LB/L1** | Slow Mode | Reduce speed to 30% |
+| **LB/L1** | Slow Mode | Reduce speed to 40% |
 | **RB/R1** | Turbo Mode | Increase speed to 150% |
 
 ### Command Line Control
@@ -224,14 +246,18 @@ car_ws/
 │   │   │   └── cmd_relay.py           # Command routing
 │   │   ├── package.xml
 │   │   └── setup.py
+│   ├── car_bringup/              # Launch files
+│   │   ├── launch/
+│   │   │   └── car_manual_control.launch.py # Main launch file
+│   │   ├── package.xml
+│   │   └── setup.py
 │   ├── car_control/              # Control algorithms (planned)
 │   │   ├── car_control/
 │   │   │   ├── pid_controller.py      # PID implementation
 │   │   │   └── lane_follower.py       # Autonomous control
 │   │   └── ...
 │   ├── car_perception/           # Computer vision (planned)
-│   ├── car_navigation/           # Path planning (planned)
-│   └── car_bringup/             # Launch files (planned)
+│   └── car_navigation/           # Path planning (planned)
 ├── README.md
 ├── LICENSE
 └── .gitignore
@@ -301,10 +327,19 @@ sudo usermod -a -G gpio $USER
 # Reboot required
 ```
 
+**PWM pins not working:**
+```bash
+# Enable PWM in device tree
+sudo /opt/nvidia/jetson-io/jetson-io.py
+# Configure for compatible hardware and enable PWM functions
+sudo reboot
+```
+
 **Motors not responding:**
-- Check motor driver connections
+- Check motor driver connections to correct pins (15, 16, 18, 32, 35, 37)
 - Verify power supply (motors need adequate current)
-- Confirm pin assignments match your hardware
+- Confirm 4-motor setup: 2 motors per side connected in parallel
+- Check minimum speed threshold (0.4 m/s required for movement)
 
 **Build errors:**
 ```bash
@@ -316,10 +351,11 @@ colcon build --symlink-install
 ## 🗺️ Roadmap
 
 ### Phase 1: Foundation ✅
-- [x] Motor control implementation
-- [x] Joystick teleoperation
-- [x] Safety systems
-- [x] Basic ROS2 architecture
+- [x] Motor control implementation with 4-motor differential drive
+- [x] Joystick teleoperation with minimum speed threshold
+- [x] Safety systems (emergency stop, slow mode, speed limiting)
+- [x] Complete ROS2 architecture with launch files
+- [x] Hardware PWM configuration on Jetson Xavier NX
 
 ### Phase 2: Vision (In Progress)
 - [ ] CSI camera integration
@@ -331,10 +367,82 @@ colcon build --symlink-install
 - [ ] PID-based control
 - [ ] Path planning
 - [ ] Obstacle avoidance
+- [ ] SLAM integration
 
+### Phase 4: Advanced Features
+- [ ] Web-based control interface
+- [ ] Machine learning integration
+- [ ] Multi-sensor fusion
+- [ ] Fleet management
 
+## 🎯 GPIO Pinout Reference
 
-## 🤝 Contributing
+### Jetson Xavier NX 40-Pin Header (BOARD numbering)
+
+```
+     3V3  (1) (2)  5V
+   GPIO2  (3) (4)  5V
+   GPIO3  (5) (6)  GND
+   GPIO4  (7) (8)  GPIO14
+     GND  (9) (10) GPIO15
+  GPIO17 (11) (12) GPIO18  ← Left Motor Direction 1
+  GPIO27 (13) (14) GND
+  GPIO22 (15) (16) GPIO23  ← Left Motor Direction 2 (Pin 16)
+     3V3 (17) (18) GPIO24  ← Left Motor Direction 1 (Pin 18)
+  GPIO10 (19) (20) GND
+   GPIO9 (21) (22) GPIO25
+  GPIO11 (23) (24) GPIO8
+     GND (25) (26) GPIO7
+   GPIO0 (27) (28) GPIO1
+   GPIO5 (29) (30) GND
+   GPIO6 (31) (32) GPIO12  ← Right Motor PWM (Pin 32)
+  GPIO13 (33) (34) GND     ← Left Motor PWM (Pin 15) - UPDATED
+  GPIO19 (35) (36) GPIO16  ← Right Motor Direction 2 (Pin 35)
+  GPIO26 (37) (38) GPIO20  ← Right Motor Direction 1 (Pin 37)
+     GND (39) (40) GPIO21
+```
+
+### PWM Configuration
+**Enable all PWM functions in device tree:**
+```bash
+sudo /opt/nvidia/jetson-io/jetson-io.py
+# Select "Configure for compatible hardware" and enable PWM functions
+```
+
+## 🚀 Launch Commands
+
+### Launch System
+```bash
+# Launch all nodes with default parameters
+ros2 launch car_bringup car_manual_control.launch.py
+
+# Launch with custom parameters
+ros2 launch car_bringup car_manual_control.launch.py max_linear_speed:=0.8 base_speed_scale:=60
+
+# Launch with slower, safer settings
+ros2 launch car_bringup car_manual_control.launch.py max_linear_speed:=0.5 max_angular_speed:=1.0 base_speed_scale:=40
+```
+
+### Monitor Launch
+```bash
+# Check all nodes are running
+ros2 node list
+
+# Monitor topics
+ros2 topic list
+
+# Check specific topic
+ros2 topic echo /cmd_vel
+```
+
+### Stop System
+```bash
+# Stop all nodes
+Ctrl+C in the launch terminal
+
+# Or kill specific launch
+ros2 lifecycle set /launch_system shutdown
+```
 
 We welcome contributions! Please follow these steps:
 
@@ -372,36 +480,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/autonomous-car-jetson-nx/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/autonomous-car-jetson-nx/discussions)
-- **Email**: fake@email.com
+- **Email**: your.email@example.com
 
 ---
 
 **⭐ If this project helps you, please give it a star on GitHub!**
 
 Made with ❤️ for the robotics community
-
-# GPIO PinOut
-
-https://jetsonhacks.com/nvidia-jetson-xavier-nx-gpio-header-pinout/
-```
-3V3   (1)  (2)   5V
-GPIO2  (3)  (4)   5V
-GPIO3  (5)  (6)   GND
-GPIO4  (7)  (8)   GPIO14
-GND   (9) (10)   GPIO15
-GPIO17 (11) (12)   GPIO18    ← Motor A Direction 1
-GPIO27 (13) (14)   GND
-GPIO22 (15) (16)   GPIO23    ← Motor A Direction 2
-3V3  (17) (18)   GPIO24
-GPIO10 (19) (20)   GND
-GPIO9 (21) (22)   GPIO25
-GPIO11 (23) (24)   GPIO8
-GND  (25) (26)   GPIO7
-GPIO0 (27) (28)   GPIO1
-GPIO5 (29) (30)   GND
-GPIO6 (31) (32)   GPIO12    ← Motor B PWM (ENB)
-GPIO13 (33) (34)   GND       ← Motor A PWM (ENA) at pin 33
-GPIO19 (35) (36)   GPIO16    ← Motor B Direction 2 at pin 35
-GPIO26 (37) (38)   GPIO20    ← Motor B Direction 1 at pin 37
-GND  (39) (40)   GPIO21
-```

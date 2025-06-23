@@ -55,44 +55,44 @@ class MotorController(Node):
         except:
             self.get_logger().warn('Could not detect board model')
         
-        # Motor pin mappings for Jetson Xavier NX
+        # Motor pin mappings for Jetson Xavier NX (updated to match working test)
         if self.pin_mode == 'BCM':
-            # Using BCM numbering - map your RPi pins to equivalent Jetson pins
-            self.in1a = 24  # Motor A Direction pin 1
-            self.in2a = 23  # Motor A Direction pin 2  
-            self.en_a = 25  # Motor A PWM enable pin
-            self.in1b = 20  # Motor B Direction pin 1
-            self.in2b = 16  # Motor B Direction pin 2
-            self.en_b = 21  # Motor B PWM enable pin
+            # Using BCM numbering - convert from BOARD numbers
+            self.in1_left = 18   # Left side direction 1 (BOARD pin 18)
+            self.in2_left = 16   # Left side direction 2 (BOARD pin 16)
+            self.en_left = 15    # Left side PWM enable (BOARD pin 15)
+            self.in1_right = 35  # Right side direction 1 (BOARD pin 35)
+            self.in2_right = 37  # Right side direction 2 (BOARD pin 37)
+            self.en_right = 32   # Right side PWM enable (BOARD pin 32)
             GPIO.setmode(GPIO.BCM)
         else:
-            # Using BOARD numbering for Jetson Xavier NX (recommended)
-            # These pins are PWM-capable on Xavier NX
-            self.in1a = 18  # Pin 18 - Motor A Direction pin 1
-            self.in2a = 16  # Pin 16 - Motor A Direction pin 2
-            self.en_a = 33  # Pin 33 - Motor A PWM enable pin (Xavier NX PWM pin)
-            self.in1b = 37  # Pin 37 - Motor B Direction pin 1  
-            self.in2b = 35  # Pin 35 - Motor B Direction pin 2
-            self.en_b = 32  # Pin 32 - Motor B PWM enable pin (Xavier NX PWM pin)
+            # Using BOARD numbering for Jetson Xavier NX (matches your working test)
+            self.in1_left = 18   # Left side direction 1 (Pin 18)
+            self.in2_left = 16   # Left side direction 2 (Pin 16)  
+            self.en_left = 15    # Left side PWM enable (Pin 15) - working PWM
+            self.in1_right = 35  # Right side direction 1 (Pin 35)
+            self.in2_right = 37  # Right side direction 2 (Pin 37)
+            self.en_right = 32   # Right side PWM enable (Pin 32) - now working PWM
             GPIO.setmode(GPIO.BOARD)
         
         try:
             # Setup GPIO pins
-            GPIO.setup([self.in1a, self.in2a, self.en_a, self.in1b, self.in2b, self.en_b], GPIO.OUT, initial=GPIO.LOW)
+            GPIO.setup([self.in1_left, self.in2_left, self.en_left, 
+                       self.in1_right, self.in2_right, self.en_right], GPIO.OUT, initial=GPIO.LOW)
             
             # Initialize PWM at 100Hz (matching your original frequency)
-            self.pwm_a = GPIO.PWM(self.en_a, 100)
-            self.pwm_b = GPIO.PWM(self.en_b, 100)
-            self.pwm_a.start(0)
-            self.pwm_b.start(0)
+            self.pwm_left = GPIO.PWM(self.en_left, 100)   # Left side PWM (Pin 15)
+            self.pwm_right = GPIO.PWM(self.en_right, 100) # Right side PWM (Pin 32)
+            self.pwm_left.start(0)
+            self.pwm_right.start(0)
             
             self.get_logger().info(f'GPIO setup completed successfully')
-            self.get_logger().info(f'Motor A pins: {self.in1a}, {self.in2a}, {self.en_a}')
-            self.get_logger().info(f'Motor B pins: {self.in1b}, {self.in2b}, {self.en_b}')
+            self.get_logger().info(f'Left side pins: IN1={self.in1_left}, IN2={self.in2_left}, PWM={self.en_left}')
+            self.get_logger().info(f'Right side pins: IN1={self.in1_right}, IN2={self.in2_right}, PWM={self.en_right}')
             
         except Exception as e:
             self.get_logger().error(f'GPIO setup failed: {e}')
-            self.get_logger().error('Make sure you have proper permissions and the pins are available')
+            self.get_logger().error('Make sure PWM pins are enabled in device tree')
             raise
     
     def cmd_vel_callback(self, msg):
@@ -145,30 +145,30 @@ class MotorController(Node):
         
         try:
             # Set PWM duty cycles
-            self.pwm_a.ChangeDutyCycle(abs(left_speed))
-            self.pwm_b.ChangeDutyCycle(abs(right_speed))
+            self.pwm_left.ChangeDutyCycle(abs(left_speed))
+            self.pwm_right.ChangeDutyCycle(abs(right_speed))
             
-            # Control left motor (Motor A) direction
+            # Control left side motors direction
             if left_speed > 0:
-                GPIO.output(self.in1a, GPIO.HIGH)
-                GPIO.output(self.in2a, GPIO.LOW)
+                GPIO.output(self.in1_left, GPIO.HIGH)
+                GPIO.output(self.in2_left, GPIO.LOW)
             elif left_speed < 0:
-                GPIO.output(self.in1a, GPIO.LOW)
-                GPIO.output(self.in2a, GPIO.HIGH)
+                GPIO.output(self.in1_left, GPIO.LOW)
+                GPIO.output(self.in2_left, GPIO.HIGH)
             else:
-                GPIO.output(self.in1a, GPIO.LOW)
-                GPIO.output(self.in2a, GPIO.LOW)
+                GPIO.output(self.in1_left, GPIO.LOW)
+                GPIO.output(self.in2_left, GPIO.LOW)
             
-            # Control right motor (Motor B) direction
+            # Control right side motors direction
             if right_speed > 0:
-                GPIO.output(self.in1b, GPIO.HIGH)
-                GPIO.output(self.in2b, GPIO.LOW)
+                GPIO.output(self.in1_right, GPIO.HIGH)
+                GPIO.output(self.in2_right, GPIO.LOW)
             elif right_speed < 0:
-                GPIO.output(self.in1b, GPIO.LOW)
-                GPIO.output(self.in2b, GPIO.HIGH)
+                GPIO.output(self.in1_right, GPIO.LOW)
+                GPIO.output(self.in2_right, GPIO.HIGH)
             else:
-                GPIO.output(self.in1b, GPIO.LOW)
-                GPIO.output(self.in2b, GPIO.LOW)
+                GPIO.output(self.in1_right, GPIO.LOW)
+                GPIO.output(self.in2_right, GPIO.LOW)
                 
         except Exception as e:
             self.get_logger().error(f'Motor control error: {e}')
@@ -185,9 +185,9 @@ class MotorController(Node):
     def stop_motors(self, t=0):
         """Stop the motors"""
         try:
-            self.pwm_a.ChangeDutyCycle(0)
-            self.pwm_b.ChangeDutyCycle(0)
-            GPIO.output([self.in1a, self.in2a, self.in1b, self.in2b], GPIO.LOW)
+            self.pwm_left.ChangeDutyCycle(0)
+            self.pwm_right.ChangeDutyCycle(0)
+            GPIO.output([self.in1_left, self.in2_left, self.in1_right, self.in2_right], GPIO.LOW)
             self.my_speed = 0
             if t > 0:
                 time.sleep(t)
@@ -206,8 +206,8 @@ class MotorController(Node):
                 try:
                     self.get_logger().info("Stopping PWM and cleaning up GPIO...")
                     self.stop_motors()
-                    self.pwm_a.stop()
-                    self.pwm_b.stop()
+                    self.pwm_left.stop()
+                    self.pwm_right.stop()
                     GPIO.cleanup()
                     self.cleanup_done = True
                     self.get_logger().info("GPIO cleanup completed")
@@ -233,51 +233,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-# # Source ROS2 and workspace
-# source /opt/ros/humble/setup.bash
-# source ~/car_ws/install/setup.bash
-
-# # Test 1: Stop (just to be safe)
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}' --once
-
-# # Test 2: Very slow forward (start conservative)
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}' --once
-
-# # Test 3: Stop
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}' --once
-
-# # Test 4: Slow turn left
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.3}}' --once
-
-# # Test 5: Slow turn right  
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: -0.3}}' --once
-
-# # Test 6: Stop
-# ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}' --once
-
-# Adjust parameters
-
-# # Reduce speed for testing
-# ros2 param set /motor_controller base_speed_scale 30
-
-# # Reduce max speed
-# ros2 param set /motor_controller max_speed 0.3
-
-# # Check current parameters
-# ros2 param list /motor_controller
-# ros2 param get /motor_controller base_speed_scale
-
-# Your Pin Configuration
-# Based on the output, your motors are connected to:
-
-# Motor A (Left):
-
-# Direction: Pins 18, 16
-# PWM: Pin 33
-
-
-# Motor B (Right):
-
-# Direction: Pins 37, 35
-# PWM: Pin 32
