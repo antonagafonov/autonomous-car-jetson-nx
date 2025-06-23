@@ -379,3 +379,29 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **⭐ If this project helps you, please give it a star on GitHub!**
 
 Made with ❤️ for the robotics community
+
+# GPIO PinOut
+
+https://jetsonhacks.com/nvidia-jetson-xavier-nx-gpio-header-pinout/
+```
+3V3   (1)  (2)   5V
+GPIO2  (3)  (4)   5V
+GPIO3  (5)  (6)   GND
+GPIO4  (7)  (8)   GPIO14
+GND   (9) (10)   GPIO15
+GPIO17 (11) (12)   GPIO18    ← Motor A Direction 1
+GPIO27 (13) (14)   GND
+GPIO22 (15) (16)   GPIO23    ← Motor A Direction 2
+3V3  (17) (18)   GPIO24
+GPIO10 (19) (20)   GND
+GPIO9 (21) (22)   GPIO25
+GPIO11 (23) (24)   GPIO8
+GND  (25) (26)   GPIO7
+GPIO0 (27) (28)   GPIO1
+GPIO5 (29) (30)   GND
+GPIO6 (31) (32)   GPIO12    ← Motor B PWM (ENB)
+GPIO13 (33) (34)   GND       ← Motor A PWM (ENA) at pin 33
+GPIO19 (35) (36)   GPIO16    ← Motor B Direction 2 at pin 35
+GPIO26 (37) (38)   GPIO20    ← Motor B Direction 1 at pin 37
+GND  (39) (40)   GPIO21
+```
