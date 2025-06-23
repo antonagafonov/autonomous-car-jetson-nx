@@ -1,4 +1,4 @@
-# 🚗 Autonomous Car Project - Jetson Xavier NX
+# 🚗 Autonomous Car Project - Jetson Xavier NX - ROS2 - Pytorch
 
 ![ROS2](https://img.shields.io/badge/ROS2-Foxy-blue)
 ![Platform](https://img.shields.io/badge/Platform-Jetson%20Xavier%20NX-green)
