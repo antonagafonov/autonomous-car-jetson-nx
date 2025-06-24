@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Fixed Camera Node for Jetson Xavier NX with CSI Camera
-Addresses resolution and pipeline issues
+Robust Camera Node for Jetson Xavier NX with CSI Camera
+Handles ROS-specific timing and resource issues
 """
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 import cv2
-import numpy as np
+import time
+import subprocess
+import os
 
 # Try importing cv_bridge with fallback
 try:
@@ -48,103 +50,135 @@ class CameraNode(Node):
         # Publishers
         self.image_publisher = self.create_publisher(Image, 'camera/image_raw', 10)
         
-        # Parameters - using camera's native resolution
-        self.declare_parameter('camera_width', 1280)  # Match camera's native resolution
-        self.declare_parameter('camera_height', 720)   # Match camera's native resolution
-        self.declare_parameter('output_width', 1280)    # Desired output resolution
-        self.declare_parameter('output_height', 720)   # Desired output resolution
-        self.declare_parameter('framerate', 60)
-        self.declare_parameter('flip_method', 2)  # 180 degree flip
-        self.declare_parameter('camera_id', 0)
+        # Parameters
+        self.declare_parameter('output_width', 640)
+        self.declare_parameter('output_height', 480)
+        self.declare_parameter('framerate', 30)
         
-        self.camera_width = self.get_parameter('camera_width').value
-        self.camera_height = self.get_parameter('camera_height').value
         self.output_width = self.get_parameter('output_width').value
         self.output_height = self.get_parameter('output_height').value
         self.framerate = self.get_parameter('framerate').value
-        self.flip_method = self.get_parameter('flip_method').value
-        self.camera_id = self.get_parameter('camera_id').value
         
-        # Build GStreamer pipeline for CSI camera
-        self.gst_pipeline = self.build_gstreamer_pipeline()
+        # Initialize camera with retry logic
+        self.cap = None
+        self.initialize_camera()
         
-        # Initialize camera
-        self.cap = cv2.VideoCapture(self.gst_pipeline, cv2.CAP_GSTREAMER)
-        
-        if not self.cap.isOpened():
-            self.get_logger().error('Failed to open camera with GStreamer pipeline')
-            self.get_logger().error(f'Pipeline: {self.gst_pipeline}')
-            # Try simplified pipeline
-            self.get_logger().info('Trying simplified pipeline...')
-            self.gst_pipeline = self.build_simple_pipeline()
-            self.cap = cv2.VideoCapture(self.gst_pipeline, cv2.CAP_GSTREAMER)
-            
-            if not self.cap.isOpened():
-                # Try fallback to regular camera
-                self.get_logger().info('Trying fallback to regular camera...')
-                self.cap = cv2.VideoCapture(self.camera_id)
-                if not self.cap.isOpened():
-                    self.get_logger().error('Failed to open any camera')
-                    return
-                else:
-                    self.get_logger().info('Using regular camera (not CSI)')
-            else:
-                self.get_logger().info('Successfully opened CSI camera with simplified pipeline')
-        else:
-            self.get_logger().info('Successfully opened CSI camera')
-        
-        # Set buffer size to reduce latency
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if self.cap is None:
+            self.get_logger().error('Failed to initialize camera after all attempts')
+            return
         
         # Timer for capturing frames
         timer_period = 1.0 / self.framerate
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
-        self.get_logger().info(f'Camera Node Started')
-        self.get_logger().info(f'Camera Resolution: {self.camera_width}x{self.camera_height}')
-        self.get_logger().info(f'Output Resolution: {self.output_width}x{self.output_height} @ {self.framerate}fps')
-        self.get_logger().info(f'Flip method: {self.flip_method}')
-        self.get_logger().info(f'Publishing to: /camera/image_raw')
+        self.get_logger().info('Camera Node Started Successfully')
+        self.get_logger().info(f'Publishing to /camera/image_raw at {self.framerate}fps')
+        self.get_logger().info(f'Output resolution: {self.output_width}x{self.output_height}')
     
-    def build_gstreamer_pipeline(self):
-        """Build GStreamer pipeline for CSI camera"""
-        pipeline = (
-            f"nvarguscamerasrc sensor-id={self.camera_id} ! "
-            f"video/x-raw(memory:NVMM), width=(int){self.camera_width}, height=(int){self.camera_height}, "
-            f"format=(string)NV12, framerate=(fraction)30/1 ! "
-            f"nvvidconv flip-method={self.flip_method} ! "
-            f"video/x-raw, width=(int){self.output_width}, height=(int){self.output_height}, format=(string)BGRx ! "
-            f"videoconvert ! "
-            f"video/x-raw, format=(string)BGR ! appsink max-buffers=1 drop=true"
-        )
-        return pipeline
+    def check_camera_availability(self):
+        """Check if camera is available and kill any processes using it"""
+        try:
+            # Check for processes using the camera
+            result = subprocess.run(['lsof', '/dev/video0'], capture_output=True, text=True)
+            if result.returncode == 0:
+                self.get_logger().warn('Camera is being used by another process')
+                self.get_logger().info(f'Processes using camera: {result.stdout}')
+            
+            # Check nvargus daemon status
+            result = subprocess.run(['pgrep', '-f', 'nvargus'], capture_output=True, text=True)
+            if result.returncode != 0:
+                self.get_logger().warn('nvargus daemon not running, trying to restart...')
+                subprocess.run(['sudo', 'systemctl', 'restart', 'nvargus-daemon'], 
+                             capture_output=True, text=True)
+                time.sleep(2)  # Wait for daemon to start
+                
+        except Exception as e:
+            self.get_logger().debug(f'Camera availability check failed: {e}')
     
-    def build_simple_pipeline(self):
-        """Build simplified GStreamer pipeline"""
-        pipeline = (
-            f"nvarguscamerasrc sensor-id={self.camera_id} ! "
-            f"video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! "
-            f"nvvidconv flip-method={self.flip_method} ! "
-            f"video/x-raw, format=(string)BGRx ! "
-            f"videoconvert ! "
-            f"appsink max-buffers=1 drop=true"
+    def initialize_camera(self):
+        """Initialize camera with robust retry logic"""
+        self.get_logger().info('Initializing camera...')
+        
+        # Check camera availability first
+        self.check_camera_availability()
+        
+        # Wait a moment for any previous camera processes to release resources
+        time.sleep(1)
+        
+        # Try the exact working pipeline from diagnostic with retries
+        gst_pipeline = (
+            "nvarguscamerasrc ! "
+            "video/x-raw(memory:NVMM), width=1920, height=1080, framerate=30/1, format=NV12 ! "
+            "nvvidconv ! "
+            "video/x-raw, format=BGRx ! "
+            "videoconvert ! "
+            "video/x-raw, format=BGR ! "
+            "appsink max-buffers=1 drop=true"
         )
-        return pipeline
+        
+        # Try multiple times with increasing delays
+        for attempt in range(5):
+            self.get_logger().info(f'Camera initialization attempt {attempt + 1}/5')
+            
+            try:
+                # Add delay between attempts
+                if attempt > 0:
+                    delay = min(attempt * 2, 5)  # 0, 2, 4, 5, 5 seconds
+                    self.get_logger().info(f'Waiting {delay} seconds before retry...')
+                    time.sleep(delay)
+                
+                self.get_logger().info('Opening CSI camera...')
+                cap = cv2.VideoCapture(gst_pipeline, cv2.CAP_GSTREAMER)
+                
+                if cap.isOpened():
+                    self.get_logger().info('Camera opened, testing capture...')
+                    
+                    # Test capture with timeout
+                    for test_attempt in range(3):
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            self.get_logger().info(f'✓ Camera working! Frame shape: {frame.shape}')
+                            
+                            # Set buffer size to reduce latency
+                            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                            
+                            self.cap = cap
+                            return
+                        else:
+                            self.get_logger().warn(f'Frame capture test {test_attempt + 1}/3 failed')
+                            time.sleep(0.5)
+                    
+                    # If we get here, capture failed
+                    self.get_logger().warn('Camera opened but frame capture failed')
+                    cap.release()
+                else:
+                    self.get_logger().warn(f'Failed to open camera on attempt {attempt + 1}')
+                    
+            except Exception as e:
+                self.get_logger().error(f'Exception on attempt {attempt + 1}: {e}')
+            
+            # Clean up any partial initialization
+            try:
+                if 'cap' in locals() and cap.isOpened():
+                    cap.release()
+            except:
+                pass
+        
+        self.get_logger().error('All camera initialization attempts failed')
+        self.cap = None
     
     def timer_callback(self):
         """Capture and publish camera frames"""
+        if self.cap is None:
+            return
+            
         ret, frame = self.cap.read()
         
-        if ret:
+        if ret and frame is not None:
             try:
                 # Resize frame if needed
                 if frame.shape[1] != self.output_width or frame.shape[0] != self.output_height:
                     frame = cv2.resize(frame, (self.output_width, self.output_height))
-                
-                # Apply manual flip if using regular camera (not CSI)
-                if self.cap.get(cv2.CAP_PROP_BACKEND) != cv2.CAP_GSTREAMER:
-                    if self.flip_method == 2:  # 180 degree flip
-                        frame = cv2.rotate(frame, cv2.ROTATE_180)
                 
                 # Convert OpenCV image to ROS Image message
                 msg = self.bridge.cv2_to_imgmsg(frame, 'bgr8')
@@ -158,24 +192,47 @@ class CameraNode(Node):
                 self.get_logger().error(f'Error processing image: {e}')
         else:
             self.get_logger().warn('Failed to capture frame from camera')
+            
+            # Try to reinitialize camera if capture fails consistently
+            if not hasattr(self, '_failed_captures'):
+                self._failed_captures = 0
+            self._failed_captures += 1
+            
+            if self._failed_captures > 10:
+                self.get_logger().warn('Too many failed captures, trying to reinitialize camera...')
+                self.destroy_camera()
+                time.sleep(2)
+                self.initialize_camera()
+                self._failed_captures = 0
+    
+    def destroy_camera(self):
+        """Clean up camera resources"""
+        if hasattr(self, 'cap') and self.cap is not None and self.cap.isOpened():
+            self.cap.release()
+            self.cap = None
+            self.get_logger().info('Camera released')
     
     def destroy_node(self):
         """Clean up camera resources"""
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            self.cap.release()
-            self.get_logger().info('Camera released')
+        self.destroy_camera()
         super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)
-    camera_node = CameraNode()
     
     try:
-        rclpy.spin(camera_node)
+        camera_node = CameraNode()
+        if camera_node.cap is not None:
+            rclpy.spin(camera_node)
+        else:
+            camera_node.get_logger().error('Camera initialization failed, exiting')
     except KeyboardInterrupt:
         camera_node.get_logger().info('Camera node interrupted')
+    except Exception as e:
+        print(f"Failed to start camera node: {e}")
     finally:
-        camera_node.destroy_node()
+        if 'camera_node' in locals():
+            camera_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':
