@@ -40,7 +40,7 @@ class JoystickController(Node):
         # Axis mapping
         self.axis_mapping = {
             'linear': 1,    # Left stick vertical
-            'angular': 0    # Left stick horizontal
+            'angular': 3    # Right stick horizontal
         }
         
         # State variables
@@ -114,7 +114,7 @@ class JoystickController(Node):
             
             # Calculate speeds
             linear_speed = linear_axis * self.max_linear_speed
-            angular_speed = -angular_axis * self.max_angular_speed  # Invert for intuitive control
+            angular_speed = angular_axis * self.max_angular_speed  # Do not Invert for intuitive control
             
             # Apply speed modifiers
             if self.slow_mode:
