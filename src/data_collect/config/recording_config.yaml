@@ -1,0 +1,18 @@
+# Configuration for the smart bag recorder
+storage:
+  base_path: "~/car_datasets"  # Where to save the datasets
+  max_bagfile_size: 1024       # Max size of a single bag file in MB before splitting
+  compression_mode: "ZSTD"     # Compression algorithm (ZSTD, LZ4, NONE)
+  storage_id: "sqlite3"        # Storage backend
+
+quality:
+  min_recording_duration: 10.0  # Minimum duration in seconds for a session to be considered valid
+  inactive_timeout: 5.0         # Seconds of inactivity before auto-stopping
+  min_linear_velocity: 0.1      # Threshold to consider the car moving forward/backward
+  min_angular_velocity: 0.05    # Threshold to consider the car turning
+
+session:
+  use_timestamp_naming: true        # Name sessions with a timestamp
+  session_prefix: "behavior_"       # Prefix for session names
+  auto_start_on_joystick: true      # Automatically start recording on joystick activity
+  auto_stop_on_inactive: true       # Automatically stop recording after a period of inactivity

@@ -7,13 +7,6 @@ import launch.conditions
 def generate_launch_description():
     # Launch arguments for configuration
     return LaunchDescription([
-        # ================== NEW RECORDER ARGUMENT ==================
-        DeclareLaunchArgument(
-            'enable_recorder',
-            default_value='false',
-            description='Enable the smart data recorder (set to true to enable)'
-        ),
-        
         # Motor control arguments
         DeclareLaunchArgument(
             'max_linear_speed',
@@ -83,17 +76,6 @@ def generate_launch_description():
             description='Enable image viewer node'
         ),
         
-        # ================== NEW RECORDER NODE ==================
-        # This node will start if enable_recorder is set to true.
-        # It handles recording automatically based on its config.
-        Node(
-            package='data_collect',
-            executable='bag_collect',
-            name='bag_collect',
-            output='screen',
-            condition=launch.conditions.IfCondition(LaunchConfiguration('enable_recorder'))
-        ),
-
         # Node 1: Motor Controller (start first)
         Node(
             package='car_drivers',
