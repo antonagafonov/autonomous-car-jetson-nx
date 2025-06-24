@@ -5,7 +5,7 @@
 ![Status](https://img.shields.io/badge/Status-Active%20Development-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
-A comprehensive autonomous car project built with ROS2 Foxy on NVIDIA Jetson Xavier NX. Features real-time joystick control, differential drive motor control, CSI camera integration, and expandable architecture for autonomous navigation capabilities.
+A comprehensive autonomous car project built with ROS2 Foxy on NVIDIA Jetson Xavier NX. Features real-time joystick control, differential drive motor control, CSI camera integration, **bag data collection**, and expandable architecture for autonomous navigation capabilities.
 
 ![Autonomous Car](images/4.jpeg)
 *The completed autonomous car with Jetson Xavier NX, 4-motor differential drive, CSI camera, and Bluetooth joystick control*
@@ -18,6 +18,7 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 - **Differential drive control** for precise movement
 - **CSI Camera integration** with hardware-accelerated pipeline
 - **Bluetooth joystick** for intuitive manual control
+- **Data collection system** for machine learning and behavior cloning
 - **Modular design** ready for autonomous navigation features
 
 ## ✨ Features
@@ -26,6 +27,7 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 - ✅ **Motor Control**: Precise PWM-based differential drive control with 4-motor setup
 - ✅ **Camera Integration**: CSI camera with GStreamer hardware acceleration and 180° flip
 - ✅ **Real-time Vision**: Live camera feed publishing to ROS2 topics at 30fps
+- ✅ **Data Collection**: Comprehensive bag recording and extraction for ML training
 - ✅ **One-Command Launch**: Complete system startup with single launch file
 - ✅ **Safety Systems**: Emergency stop, speed limiting, and mode switching with minimum speed threshold
 - ✅ **Real-time Performance**: Low-latency control loop for responsive driving
@@ -83,6 +85,10 @@ sudo apt install python3-rpi.gpio
 
 # Install development tools
 sudo apt install python3-colcon-common-extensions
+
+# Install data collection dependencies
+sudo apt install ros-foxy-rosbag2* ros-foxy-image-view
+pip3 install zstandard  # For compressed bag support
 ```
 
 ### Setup GPIO and PWM Configuration
@@ -107,7 +113,7 @@ mkdir -p ~/car_ws/src
 cd ~/car_ws
 
 # Clone repository
-git clone https://github.com/yourusername/autonomous-car-jetson-nx.git src/
+git clone https://github.com/antonagafonov/autonomous-car-jetson-nx.git src/
 
 # Install dependencies
 rosdep install --from-paths src --ignore-src -r -y
@@ -175,6 +181,109 @@ ros2 launch car_bringup car_camera.launch.py \
 ros2 launch car_bringup car_full_system.launch.py \
   enable_image_viewer:=true
 ```
+
+### 🎒 Data Collection for Machine Learning
+
+The project includes a comprehensive data collection system for training autonomous driving models using behavior cloning and imitation learning.
+
+#### Record Training Data
+
+**Start recording while driving manually:**
+```bash
+# Launch car with camera (required for ML data)
+ros2 launch car_bringup car_full_system.launch.py
+
+# In another terminal, start recording
+mkdir -p ~/training_data
+cd ~/training_data
+
+# Record all topics for comprehensive dataset
+ros2 bag record -o drive_session_001 \
+  /camera/image_raw \
+  /cmd_vel \
+  /cmd_vel_manual \
+  /joy \
+  /autonomous_mode
+
+# Or record specific topics only
+ros2 bag record -o drive_session_001 \
+  /camera/image_raw /cmd_vel_manual
+```
+
+**Record with automatic naming:**
+```bash
+# Create session with timestamp
+SESSION_NAME="drive_$(date +%Y%m%d_%H%M%S)"
+ros2 bag record -o $SESSION_NAME \
+  /camera/image_raw /cmd_vel_manual /joy
+```
+
+#### Extract Training Data
+
+Use the integrated bag data extractor to convert ROS2 bags into ML-ready format:
+
+```bash
+# Extract from bag directory
+python3 bag_collect.py ~/training_data/drive_session_001
+
+# Extract from specific .db3 file
+python3 bag_collect.py ~/training_data/drive_session_001/rosbag2_2024_01_15-10_30_00_0.db3
+
+# Specify custom output directory
+python3 bag_collect.py ~/training_data/drive_session_001 -o ~/ml_datasets/session_001
+
+# Extract multiple sessions
+for bag in ~/training_data/drive_session_*; do
+    python3 bag_collect.py "$bag"
+done
+```
+
+#### Extracted Data Structure
+
+The extractor creates an organized dataset:
+
+```
+drive_session_001_extracted/
+├── images/               # Camera images for visual input
+│   ├── image_000000.png  # Sequential PNG images (640x480)
+│   ├── image_000001.png
+│   └── ...
+├── data/                 # Command and sensor data
+│   ├── images.csv        # Image metadata with timestamps
+│   ├── cmd_vel.csv       # Motor commands (actual outputs)
+│   ├── cmd_vel_manual.csv # Manual commands (training labels)
+│   ├── joy.csv           # Raw joystick input
+│   └── *.json           # Same data in JSON format
+└── metadata/
+    └── extraction_summary.json  # Dataset statistics
+```
+
+#### Data Format Details
+
+**Images (PNG files):**
+- Format: 640x480 BGR images ready for OpenCV/ML frameworks
+- Naming: Sequential `image_XXXXXX.png`
+- Synchronized with command timestamps
+
+**Command Data (CSV format):**
+```csv
+timestamp,linear_x,linear_y,linear_z,angular_x,angular_y,angular_z
+1642248600123456789,0.2,0.0,0.0,0.0,0.0,0.1
+```
+
+**Image Metadata (CSV format):**
+```csv
+filename,timestamp,width,height,encoding,frame_id,seq
+image_000000.png,1642248600123456789,640,480,bgr8,camera_link,0
+```
+
+#### ML Training Ready
+
+The extracted data is ready for:
+- **Behavior Cloning**: Use `cmd_vel_manual` as labels, images as input
+- **Imitation Learning**: Train neural networks to mimic human driving
+- **Computer Vision**: Lane detection, object recognition training
+- **Reinforcement Learning**: State-action pairs for training
 
 ### Camera System
 
@@ -302,6 +411,14 @@ ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.2}, angular: {z: 0.5
 | `cmd_relay` | `car_teleop` | Command routing |
 | `joy_node` | `joy` | Joystick hardware interface |
 
+### Data Collection Tools
+
+| Tool | Function |
+|------|----------|
+| `ros2 bag record` | Record ROS2 topics to bag files |
+| `bag_collect.py` | Extract and organize bag data for ML |
+| **Bag Data Extractor** | Convert bags to training-ready datasets |
+
 ## ⚙️ Configuration
 
 ### Motor Controller Parameters
@@ -350,6 +467,20 @@ ros2 param set /joystick_controller max_angular_speed 2.0
 
 # Adjust deadzone sensitivity
 ros2 param set /joystick_controller deadzone 0.1
+```
+
+### Data Collection Parameters
+
+```bash
+# Set recording quality vs storage trade-off
+ros2 param set /camera_node output_width 320   # Lower for storage
+ros2 param set /camera_node output_width 640   # Standard quality
+ros2 param set /camera_node output_width 960   # High quality
+
+# Adjust recording frequency
+ros2 topic hz /camera/image_raw               # Check current rate
+ros2 param set /camera_node framerate 15     # Lower for storage
+ros2 param set /camera_node framerate 30     # Standard rate
 ```
 
 ## 📁 Project Structure
@@ -420,6 +551,7 @@ car_ws/
 ├── build/                        # Build artifacts (auto-generated)
 ├── install/                      # Installation files (auto-generated)
 ├── log/                          # Build and runtime logs
+├── bag_collect.py               # **NEW: ML data extraction tool**
 ├── images/                       # Project documentation images
 │   ├── 1.jpeg
 │   ├── 2.jpeg
@@ -493,6 +625,27 @@ ros2 param list /motor_controller
 ros2 topic echo /cmd_vel
 ```
 
+### Debug Data Collection
+
+```bash
+# Check bag recording status
+ros2 bag info <bag_directory>
+
+# List available topics for recording
+ros2 topic list
+
+# Monitor recording rate
+ros2 topic hz /camera/image_raw
+watch "ros2 topic hz /cmd_vel_manual"
+
+# Check bag file size during recording
+ls -lh ~/training_data/
+
+# Test data extraction
+python3 bag_collect.py --help
+python3 bag_collect.py <test_bag> -o /tmp/test_extraction
+```
+
 ## 🚧 Troubleshooting
 
 ### Common Issues
@@ -561,6 +714,22 @@ sudo reboot
 - Confirm 4-motor setup: 2 motors per side connected in parallel
 - Check minimum speed threshold (0.4 m/s required for movement)
 
+**Data collection issues:**
+```bash
+# Check available disk space
+df -h
+
+# Verify bag recording permissions
+ls -la ~/training_data/
+
+# Test bag extraction on small file first
+ros2 bag record -o test_bag /joy --duration 10
+python3 bag_collect.py test_bag
+
+# Check zstandard installation for compressed bags
+python3 -c "import zstandard; print('zstandard OK')"
+```
+
 **Build errors:**
 ```bash
 # Clean and rebuild
@@ -585,17 +754,30 @@ colcon build --symlink-install
 - [ ] Lane detection algorithms
 - [ ] Object detection
 
-### Phase 3: Autonomy
+### Phase 3: Data Collection ✅
+- [x] **ROS2 bag recording system**
+- [x] **Integrated data extraction tool**
+- [x] **ML-ready dataset organization**
+- [x] **Image and command synchronization**
+- [x] **Support for compressed bags**
+
+### Phase 4: Machine Learning 🚧
+- [ ] **Behavior cloning implementation**
+- [ ] **Neural network training pipeline**
+- [ ] **Imitation learning framework**
+- [ ] **End-to-end driving model**
+
+### Phase 5: Autonomy
 - [ ] PID-based control
 - [ ] Path planning
 - [ ] Obstacle avoidance
 - [ ] SLAM integration
 
-### Phase 4: Advanced Features
+### Phase 6: Advanced Features
 - [ ] Web-based control interface
-- [ ] Machine learning integration
 - [ ] Multi-sensor fusion
 - [ ] Fleet management
+- [ ] Model deployment optimization
 
 ## 🎯 Camera Configuration Examples
 
@@ -634,123 +816,74 @@ ros2 run car_perception camera_node --ros-args \
   -p framerate:=30 -p flip_method:=2
 ```
 
-## 🚀 Launch Commands
-
-### Launch System
+**For data collection (recommended):**
 ```bash
-# Launch complete system (motors + camera + joystick)
+ros2 run car_perception camera_node --ros-args \
+  -p camera_width:=1280 -p camera_height:=720 \
+  -p output_width:=640 -p output_height:=480 \
+  -p framerate:=30 -p flip_method:=2
+```
+
+## 🎓 Machine Learning Workflow
+
+### 1. Data Collection
+```bash
+# Start car system
 ros2 launch car_bringup car_full_system.launch.py
 
-# Launch camera system only (camera + viewer)
-ros2 launch car_bringup car_camera.launch.py
+# Record training session
+mkdir -p ~/ml_data/training_sessions
+cd ~/ml_data/training_sessions
 
-# Launch with custom camera settings
-ros2 launch car_bringup car_full_system.launch.py \
-  camera_width:=1280 camera_height:=720 \
-  output_width:=640 output_height:=480
+# Record comprehensive dataset
+ros2 bag record -o session_$(date +%H%M%S) \
+  /camera/image_raw /cmd_vel_manual /joy
 
-# Launch manual control only (no camera)
-ros2 launch car_bringup car_manual_control.launch.py
-
-# Launch with performance settings
-ros2 launch car_bringup car_full_system.launch.py \
-  max_linear_speed:=0.8 base_speed_scale:=80 \
-  camera_width:=1920 camera_height:=1080 \
-  enable_image_viewer:=true
+# Drive manually for 10-30 minutes with varied scenarios:
+# - Straight driving
+# - Turning left/right
+# - Different speeds
+# - Various lighting conditions
 ```
 
-### Monitor Launch
+### 2. Data Extraction
 ```bash
-# Check all nodes are running
-ros2 node list
+# Extract all sessions
+for session in ~/ml_data/training_sessions/session_*; do
+    echo "Extracting $session..."
+    python3 bag_collect.py "$session"
+done
 
-# Monitor topics
-ros2 topic list
-
-# Check camera feed
-ros2 topic hz /camera/image_raw
-
-# View live camera feed
-ros2 run car_perception image_viewer
-
-# Or directly with Python
-python3 src/car_perception/car_perception/image_viewer.py
+# Verify extracted data
+ls ~/ml_data/training_sessions/session_*_extracted/
 ```
 
-### Stop System
+### 3. Data Analysis
 ```bash
-# Stop all nodes
-Ctrl+C in the launch terminal
-
-# Or kill specific processes
-pkill -f "ros2 launch"
+# Check dataset statistics
+python3 -c "
+import json
+with open('session_123456_extracted/metadata/extraction_summary.json') as f:
+    summary = json.load(f)
+    print(f'Duration: {summary[\"timing_analysis\"][\"duration_seconds\"]:.1f}s')
+    print(f'Images: {summary[\"data_summary\"][\"total_images\"]}')
+    print(f'Commands: {summary[\"data_summary\"][\"total_cmd_vel_manual\"]}')
+    print(f'Frequency: {summary[\"timing_analysis\"][\"command_frequency\"]:.1f} Hz')
+"
 ```
 
-## 🤝 Contributing
+### 4. Training Preparation
+The extracted data is ready for popular ML frameworks:
 
-We welcome contributions! Please follow these steps:
+**PyTorch Example:**
+```python
+import torch
+import cv2
+import pandas as pd
+from torch.utils.data import Dataset
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Development Guidelines
-
-- Follow ROS2 coding standards
-- Add comprehensive documentation
-- Include unit tests where applicable
-- Test on actual hardware before submitting
-- Test camera functionality on Jetson Xavier NX
-
-## 📚 Documentation
-
-- [ROS2 Foxy Documentation](https://docs.ros.org/en/foxy/)
-- [Jetson Xavier NX Developer Guide](https://developer.nvidia.com/embedded/jetson-xavier-nx-devkit)
-- [GStreamer Documentation](https://gstreamer.freedesktop.org/documentation/)
-- [OpenCV Documentation](https://docs.opencv.org/)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🏆 Acknowledgments
-
-- **NVIDIA** for the Jetson Xavier NX platform and GStreamer integration
-- **Open Robotics** for ROS2 framework
-- **Raspberry Pi Foundation** for GPIO libraries
-- The **open-source robotics community**
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/autonomous-car-jetson-nx/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/autonomous-car-jetson-nx/discussions)
-- **Email**: your.email@example.com
-
----
-
-**⭐ If this project helps you, please give it a star on GitHub!**
-
-## 📸 **System in Action**
-
-Here's the complete autonomous car system running with camera feed and joystick control:
-
-![Camera and Joystick Control](images/bringup_with_camera_joy.png)
-*Manual control with live camera feed - launched with: `ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true enable_image_viewer:=true`*
-
-The image shows:
-- **Motor control**: Responding to joystick commands
-- **Live camera feed**: Real-time CSI camera stream with 180° flip
-- **Image viewer**: OpenCV window displaying camera output with FPS and resolution overlay
-- **Complete ROS2 integration**: All nodes working together seamlessly
-
-This demonstrates the full integration of:
-- ✅ **Hardware control** (4-motor differential drive)
-- ✅ **Computer vision** (CSI camera with GStreamer acceleration)  
-- ✅ **Human interface** (Bluetooth joystick teleoperation)
-- ✅ **Real-time performance** (30fps camera, low-latency control)
-
-Ready for autonomous navigation development! 🚗🤖
-
-Made with ❤️ for the robotics community
+class DrivingDataset(Dataset):
+    def __init__(self, data_dir):
+        self.data_dir = data_dir
+        self.commands = pd.read_csv(f"{data_dir}/data/cmd_vel_manual.csv")
+        self.images = pd.read_csv(f"{data_dir}/data/images.csv")
