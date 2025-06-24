@@ -2,11 +2,12 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
+import launch.conditions
 
 def generate_launch_description():
     # Launch arguments for configuration
     return LaunchDescription([
-        # Launch arguments
+        # Motor control arguments
         DeclareLaunchArgument(
             'max_linear_speed',
             default_value='1.0',
@@ -28,6 +29,53 @@ def generate_launch_description():
             description='Motor speed scale (0-100%)'
         ),
         
+        # Camera arguments
+        DeclareLaunchArgument(
+            'enable_camera',
+            default_value='false',
+            description='Enable camera node (set to true to enable camera)'
+        ),
+        DeclareLaunchArgument(
+            'camera_width',
+            default_value='1280',
+            description='Camera sensor width resolution'
+        ),
+        DeclareLaunchArgument(
+            'camera_height',
+            default_value='720',
+            description='Camera sensor height resolution'
+        ),
+        DeclareLaunchArgument(
+            'output_width',
+            default_value='640',
+            description='Output image width resolution'
+        ),
+        DeclareLaunchArgument(
+            'output_height',
+            default_value='480',
+            description='Output image height resolution'
+        ),
+        DeclareLaunchArgument(
+            'framerate',
+            default_value='30',
+            description='Camera framerate in fps'
+        ),
+        DeclareLaunchArgument(
+            'flip_method',
+            default_value='2',
+            description='Camera flip method (0=none, 1=90CW, 2=180, 3=90CCW)'
+        ),
+        DeclareLaunchArgument(
+            'camera_id',
+            default_value='0',
+            description='Camera sensor ID'
+        ),
+        DeclareLaunchArgument(
+            'enable_image_viewer',
+            default_value='false',
+            description='Enable image viewer node'
+        ),
+        
         # Node 1: Motor Controller (start first)
         Node(
             package='car_drivers',
@@ -44,7 +92,27 @@ def generate_launch_description():
             respawn_delay=2.0
         ),
         
-        # Node 2: Joy Node (start after small delay)
+        # Node 2: Camera Node (start with motor controller)
+        Node(
+            package='car_perception',
+            executable='camera_node',
+            name='camera_node',
+            output='screen',
+            parameters=[{
+                'camera_width': LaunchConfiguration('camera_width'),
+                'camera_height': LaunchConfiguration('camera_height'),
+                'output_width': LaunchConfiguration('output_width'),
+                'output_height': LaunchConfiguration('output_height'),
+                'framerate': LaunchConfiguration('framerate'),
+                'flip_method': LaunchConfiguration('flip_method'),
+                'camera_id': LaunchConfiguration('camera_id'),
+            }],
+            respawn=True,
+            respawn_delay=2.0,
+            condition=launch.conditions.IfCondition(LaunchConfiguration('enable_camera')),
+        ),
+        
+        # Node 3: Joy Node (start after small delay)
         TimerAction(
             period=2.0,
             actions=[
@@ -64,7 +132,7 @@ def generate_launch_description():
             ]
         ),
         
-        # Node 3: Joystick Controller (start after joy node)
+        # Node 4: Joystick Controller (start after joy node)
         TimerAction(
             period=4.0,
             actions=[
@@ -85,7 +153,7 @@ def generate_launch_description():
             ]
         ),
         
-        # Node 4: Command Relay (start last)
+        # Node 5: Command Relay (start after joystick controller)
         TimerAction(
             period=6.0,
             actions=[
@@ -96,6 +164,22 @@ def generate_launch_description():
                     output='screen',
                     respawn=True,
                     respawn_delay=2.0
+                )
+            ]
+        ),
+        
+        # Node 6: Image Viewer (optional, start after camera is stable)
+        TimerAction(
+            period=8.0,
+            actions=[
+                Node(
+                    package='car_perception',
+                    executable='image_viewer',
+                    name='image_viewer',
+                    output='screen',
+                    respawn=True,
+                    respawn_delay=2.0,
+                    condition=launch.conditions.IfCondition(LaunchConfiguration('enable_image_viewer')),
                 )
             ]
         )

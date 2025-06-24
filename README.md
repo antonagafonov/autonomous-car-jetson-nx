@@ -130,18 +130,50 @@ source ~/car_ws/install/setup.bash
 ros2 launch car_bringup car_full_system.launch.py
 ```
 
-**Launch manual control only:**
+**Launch camera system only:**
+```bash
+ros2 launch car_bringup car_camera.launch.py
+```
+
+**Launch manual control only (no camera - default):**
 ```bash
 ros2 launch car_bringup car_manual_control.launch.py
 ```
 
+**Launch manual control with camera:**
+```bash
+ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true
+```
+
 **Launch with custom parameters:**
 ```bash
-# Conservative settings for testing
-ros2 launch car_bringup car_full_system.launch.py max_linear_speed:=0.5 base_speed_scale:=40
+# Manual control only (motors + joystick, no camera)
+ros2 launch car_bringup car_manual_control.launch.py
+
+# Manual control with camera enabled
+ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true
+
+# Manual control with camera and viewer for debugging
+ros2 launch car_bringup car_manual_control.launch.py \
+  enable_camera:=true enable_image_viewer:=true
+
+# Conservative settings for testing with camera
+ros2 launch car_bringup car_manual_control.launch.py \
+  enable_camera:=true max_linear_speed:=0.5 base_speed_scale:=40 \
+  output_width:=320 output_height:=240
 
 # Performance settings with higher resolution
-ros2 launch car_bringup car_full_system.launch.py max_linear_speed:=0.8 camera_width:=1280 camera_height:=720
+ros2 launch car_bringup car_full_system.launch.py \
+  max_linear_speed:=0.8 camera_width:=1920 camera_height:=1080 \
+  output_width:=960 output_height:=540
+
+# Camera only with viewer
+ros2 launch car_bringup car_camera.launch.py \
+  camera_width:=1280 camera_height:=720 enable_viewer:=true
+
+# Full system with image viewer enabled
+ros2 launch car_bringup car_full_system.launch.py \
+  enable_image_viewer:=true
 ```
 
 ### Camera System
@@ -329,7 +361,9 @@ car_ws/
 │   │   ├── car_bringup/
 │   │   │   └── __init__.py
 │   │   ├── launch/
-│   │   │   └── car_manual_control.launch.py # Motor + Joystick launch
+│   │   │   ├── car_manual_control.launch.py # Motor + Joystick launch
+│   │   │   ├── car_full_system.launch.py    # Complete system with camera
+│   │   │   └── car_camera.launch.py         # Camera system only
 │   │   ├── package.xml
 │   │   ├── setup.py
 │   │   └── test/
@@ -607,6 +641,9 @@ ros2 run car_perception camera_node --ros-args \
 # Launch complete system (motors + camera + joystick)
 ros2 launch car_bringup car_full_system.launch.py
 
+# Launch camera system only (camera + viewer)
+ros2 launch car_bringup car_camera.launch.py
+
 # Launch with custom camera settings
 ros2 launch car_bringup car_full_system.launch.py \
   camera_width:=1280 camera_height:=720 \
@@ -618,7 +655,8 @@ ros2 launch car_bringup car_manual_control.launch.py
 # Launch with performance settings
 ros2 launch car_bringup car_full_system.launch.py \
   max_linear_speed:=0.8 base_speed_scale:=80 \
-  camera_width:=1920 camera_height:=1080
+  camera_width:=1920 camera_height:=1080 \
+  enable_image_viewer:=true
 ```
 
 ### Monitor Launch

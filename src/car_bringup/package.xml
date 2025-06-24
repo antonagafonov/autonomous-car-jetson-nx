@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>car_bringup</name>
+  <n>car_bringup</n>
   <version>0.0.0</version>
   <description>Launch files for autonomous car</description>
   <maintainer email="toonagafonov@gmail.com">antonagafonov</maintainer>
@@ -11,6 +11,7 @@
   <depend>launch</depend>
   <depend>launch_ros</depend>
   <depend>car_drivers</depend>
+  <depend>car_perception</depend>
   <depend>car_teleop</depend>
   <depend>joy</depend>
 
