@@ -160,7 +160,10 @@ ros2 run car_perception camera_node --ros-args -p camera_width:=1920 -p camera_h
 
 **View camera feed:**
 ```bash
-# Simple image viewer (displays camera feed in OpenCV window)
+# Simple image viewer node (displays camera feed in OpenCV window)
+ros2 run car_perception image_viewer
+
+# Or run directly with Python
 python3 src/car_perception/car_perception/image_viewer.py
 
 # Or use RQT image viewer
@@ -214,6 +217,12 @@ source ~/car_ws/install/setup.bash
 ros2 run car_teleop cmd_relay
 ```
 
+**Terminal 6: Image Viewer**
+```bash
+source ~/car_ws/install/setup.bash
+ros2 run car_perception image_viewer
+```
+
 ### Joystick Controls
 
 | Control | Action | Description |
@@ -256,6 +265,7 @@ ros2 topic pub /cmd_vel geometry_msgs/Twist '{linear: {x: 0.2}, angular: {z: 0.5
 |------|---------|----------|
 | `motor_controller` | `car_drivers` | GPIO motor control |
 | `camera_node` | `car_perception` | CSI camera interface with GStreamer |
+| `image_viewer` | `car_perception` | Live camera feed display with OpenCV |
 | `joystick_controller` | `car_teleop` | Joystick input processing |
 | `cmd_relay` | `car_teleop` | Command routing |
 | `joy_node` | `joy` | Joystick hardware interface |
@@ -315,38 +325,75 @@ ros2 param set /joystick_controller deadzone 0.1
 ```
 car_ws/
 ├── src/
+│   ├── car_bringup/              # Launch files and system integration
+│   │   ├── car_bringup/
+│   │   │   └── __init__.py
+│   │   ├── launch/
+│   │   │   └── car_manual_control.launch.py # Motor + Joystick launch
+│   │   ├── package.xml
+│   │   ├── setup.py
+│   │   └── test/
+│   ├── car_control/              # Control algorithms (future)
+│   │   ├── car_control/
+│   │   │   └── __init__.py
+│   │   ├── package.xml
+│   │   └── setup.py
+│   ├── car_description/          # Robot description files (future)
+│   │   ├── car_description/
+│   │   │   └── __init__.py
+│   │   ├── package.xml
+│   │   └── setup.py
 │   ├── car_drivers/              # Hardware interface nodes
 │   │   ├── car_drivers/
-│   │   │   └── motor_controller.py    # Main motor control
+│   │   │   ├── motor_controller.py    # Main motor control
+│   │   │   ├── motor_test.py          # Motor testing utilities
+│   │   │   ├── debug.py               # Debug utilities
+│   │   │   └── __init__.py
+│   │   ├── package.xml
+│   │   ├── setup.py
+│   │   └── test/
+│   ├── car_msgs/                 # Custom message definitions (future)
+│   │   ├── CMakeLists.txt
+│   │   ├── package.xml
+│   │   ├── include/
+│   │   └── src/
+│   ├── car_navigation/           # Path planning (future)
+│   │   ├── car_navigation/
+│   │   │   └── __init__.py
 │   │   ├── package.xml
 │   │   └── setup.py
-│   ├── car_perception/           # Computer vision
+│   ├── car_perception/           # Computer vision and sensors
 │   │   ├── car_perception/
 │   │   │   ├── camera_node.py         # CSI camera with GStreamer
-│   │   │   └── image_viewer.py        # Camera feed viewer
+│   │   │   ├── image_viewer.py        # Camera feed viewer
+│   │   │   └── __init__.py
 │   │   ├── package.xml
-│   │   └── setup.py
+│   │   ├── setup.py
+│   │   └── test/
 │   ├── car_teleop/               # Manual control
 │   │   ├── car_teleop/
 │   │   │   ├── joystick_controller.py # Joystick input handling
-│   │   │   └── cmd_relay.py           # Command routing
+│   │   │   ├── cmd_relay.py           # Command routing
+│   │   │   └── __init__.py
 │   │   ├── package.xml
-│   │   └── setup.py
-│   ├── car_bringup/              # Launch files
-│   │   ├── launch/
-│   │   │   ├── car_manual_control.launch.py # Motor + Joystick
-│   │   │   └── car_full_system.launch.py    # Complete system
-│   │   ├── package.xml
-│   │   └── setup.py
-│   ├── car_control/              # Control algorithms (planned)
-│   │   ├── car_control/
-│   │   │   ├── pid_controller.py      # PID implementation
-│   │   │   └── lane_follower.py       # Autonomous control
-│   │   └── ...
-│   └── car_navigation/           # Path planning (planned)
+│   │   ├── setup.py
+│   │   └── test/
+│   └── vision_opencv/            # OpenCV integration
+│       ├── cv_bridge/            # ROS-OpenCV bridge
+│       ├── image_geometry/       # Camera geometry utilities
+│       ├── opencv_tests/         # OpenCV test utilities
+│       └── vision_opencv/        # Meta-package
+├── build/                        # Build artifacts (auto-generated)
+├── install/                      # Installation files (auto-generated)
+├── log/                          # Build and runtime logs
+├── images/                       # Project documentation images
+│   ├── 1.jpeg
+│   ├── 2.jpeg
+│   ├── 3.jpeg
+│   └── 4.jpeg
+├── env.yaml                      # Environment configuration
 ├── README.md
-├── LICENSE
-└── .gitignore
+└── tree.txt                      # Project structure reference
 ```
 
 ## 🔍 Monitoring and Debugging
@@ -586,6 +633,9 @@ ros2 topic list
 ros2 topic hz /camera/image_raw
 
 # View live camera feed
+ros2 run car_perception image_viewer
+
+# Or directly with Python
 python3 src/car_perception/car_perception/image_viewer.py
 ```
 
