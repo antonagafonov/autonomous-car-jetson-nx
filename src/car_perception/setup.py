@@ -13,13 +13,15 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='toon',
-    maintainer_email='toon@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='antonagafonov',
+    maintainer_email='toonagafonov@gmail.com',
+    description='Computer vision and perception for autonomous car',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'camera_node = car_perception.camera_node:main',
+            'image_viewer = car_perception.image_viewer:main',
         ],
     },
 )
