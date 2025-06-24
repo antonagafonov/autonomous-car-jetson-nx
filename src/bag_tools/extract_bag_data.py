@@ -416,7 +416,7 @@ class IntegratedBagExtractor:
         return self.extract_images_manual_enhanced()
     
     def extract_images_manual_enhanced(self):
-        """Enhanced manual image extraction with the proven format (offset 56)."""
+        """Enhanced manual image extraction with the proven format - FIXED VERSION."""
         try:
             print("🔧 Starting proven manual extraction method...")
             
@@ -451,6 +451,10 @@ class IntegratedBagExtractor:
             extracted_count = 0
             failed_count = 0
             
+            # Ensure output directory exists with proper permissions
+            self.output_path.mkdir(exist_ok=True, mode=0o755)
+            (self.output_path / "images").mkdir(exist_ok=True, mode=0o755)
+            
             for i, (timestamp, data) in enumerate(image_messages):
                 if i % 50 == 0:
                     print(f"📸 Processing {i+1}/{len(image_messages)} images...")
@@ -465,28 +469,45 @@ class IntegratedBagExtractor:
                         img_array = np.frombuffer(img_data, dtype=np.uint8)
                         img = img_array.reshape((HEIGHT, WIDTH, 3))
                         
-                        # Save image
+                        # Save image with absolute path
                         filename = f"image_{extracted_count:06d}.png"
                         filepath = self.output_path / "images" / filename
                         
-                        if cv2.imwrite(str(filepath), img):
-                            # Add to metadata
-                            self.images_data.append({
-                                'filename': filename,
-                                'timestamp': timestamp,
-                                'width': WIDTH,
-                                'height': HEIGHT,
-                                'encoding': 'bgr8',
-                                'frame_id': 'camera_link',
-                                'seq': extracted_count
-                            })
-                            extracted_count += 1
+                        # Write image with verification
+                        write_success = cv2.imwrite(str(filepath), img)
+                        
+                        if write_success and filepath.exists():
+                            # Verify file was actually created and has reasonable size
+                            file_size = filepath.stat().st_size
+                            if file_size > 1000:  # At least 1KB
+                                # Add to metadata
+                                self.images_data.append({
+                                    'filename': filename,
+                                    'timestamp': timestamp,
+                                    'width': WIDTH,
+                                    'height': HEIGHT,
+                                    'encoding': 'bgr8',
+                                    'frame_id': 'camera_link',
+                                    'seq': extracted_count,
+                                    'file_size': file_size
+                                })
+                                extracted_count += 1
+                            else:
+                                print(f"⚠️  Image {i} file too small ({file_size} bytes)")
+                                failed_count += 1
+                                # Remove the bad file
+                                try:
+                                    filepath.unlink()
+                                except:
+                                    pass
                         else:
+                            print(f"❌ Failed to write image {i}")
                             failed_count += 1
                     else:
                         failed_count += 1
                         
                 except Exception as e:
+                    print(f"❌ Error processing image {i}: {e}")
                     failed_count += 1
                     continue
             
@@ -496,7 +517,21 @@ class IntegratedBagExtractor:
                 print(f"✅ Proven method successful: {extracted_count} images extracted")
                 if failed_count > 0:
                     print(f"⚠️  {failed_count} images failed to extract")
+                
+                # Set image count for summary
                 self.image_count = extracted_count
+                
+                # Test a few images to verify quality
+                print(f"🔍 Verifying extracted images...")
+                for i in range(min(3, extracted_count)):
+                    test_path = self.output_path / "images" / f"image_{i:06d}.png"
+                    if test_path.exists():
+                        test_img = cv2.imread(str(test_path))
+                        if test_img is not None:
+                            print(f"✅ image_{i:06d}.png: {test_img.shape}, range {test_img.min()}-{test_img.max()}")
+                        else:
+                            print(f"❌ image_{i:06d}.png: Could not read back")
+                
                 return True
             else:
                 print("❌ Proven method failed - no images extracted")
@@ -504,6 +539,8 @@ class IntegratedBagExtractor:
                 
         except Exception as e:
             print(f"❌ Proven extraction error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def analyze_image_format(self, data):
