@@ -732,4 +732,25 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **⭐ If this project helps you, please give it a star on GitHub!**
 
+## 📸 **System in Action**
+
+Here's the complete autonomous car system running with camera feed and joystick control:
+
+![Camera and Joystick Control](images/bringup_with_camera_joy.png)
+*Manual control with live camera feed - launched with: `ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true enable_image_viewer:=true`*
+
+The image shows:
+- **Motor control**: Responding to joystick commands
+- **Live camera feed**: Real-time CSI camera stream with 180° flip
+- **Image viewer**: OpenCV window displaying camera output with FPS and resolution overlay
+- **Complete ROS2 integration**: All nodes working together seamlessly
+
+This demonstrates the full integration of:
+- ✅ **Hardware control** (4-motor differential drive)
+- ✅ **Computer vision** (CSI camera with GStreamer acceleration)  
+- ✅ **Human interface** (Bluetooth joystick teleoperation)
+- ✅ **Real-time performance** (30fps camera, low-latency control)
+
+Ready for autonomous navigation development! 🚗🤖
+
 Made with ❤️ for the robotics community
