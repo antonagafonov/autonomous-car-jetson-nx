@@ -172,6 +172,8 @@ ros2 launch car_bringup car_manual_control.launch.py
 # Manual control with camera enabled
 ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true
 
+ros2 launch car_bringup car_manual_control.launch.py enable_camera:=true enable_recording:=true
+
 # Manual control with camera and viewer for debugging
 ros2 launch car_bringup car_manual_control.launch.py \
   enable_camera:=true enable_image_viewer:=true
