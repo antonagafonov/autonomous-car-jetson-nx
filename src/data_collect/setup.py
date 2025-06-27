@@ -21,7 +21,6 @@ setup(
     entry_points={
         'console_scripts': [
             'bag_collect = data_collect.bag_collect:main',
-            'bag_analyze = data_collect.bag_analyze:main',
         ],
     },
 )
