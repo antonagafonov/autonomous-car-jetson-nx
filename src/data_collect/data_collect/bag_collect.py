@@ -1,804 +1,606 @@
 #!/usr/bin/env python3
 """
-Integrated ROS2 Bag Data Extractor
+Alternative Smart ROS2 Bag Recorder using subprocess calls
+Compatible with ROS2 Foxy on Jetson Xavier NX
 
-Combines SQLite direct access for commands with ROS2 tools for images.
-This approach is reliable and works without complex CDR parsing.
+This version uses subprocess calls to 'ros2 bag record' instead of rosbag2_py
+to avoid import issues on some systems.
 """
 
 import os
-import sys
-import json
-import csv
-import sqlite3
-import struct
-import subprocess
-import signal
 import time
+import json
+import yaml
+import shutil
+import subprocess
 import threading
+from datetime import datetime, timedelta
 from pathlib import Path
-from datetime import datetime
-import argparse
+from typing import Dict, List, Optional, Any
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.callback_groups import ReentrantCallbackGroup
+
+# Message types
+from std_msgs.msg import Bool, String
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Joy, Image
+from std_srvs.srv import SetBool, Trigger
 
 
-class IntegratedBagExtractor:
-    """Extract data from ROS2 bag files using hybrid approach."""
+class BagRecorder(Node):
+    """Smart ROS2 bag recorder using subprocess for better compatibility."""
     
-    def __init__(self, bag_path, output_path):
-        self.bag_path = Path(bag_path)
-        self.output_path = Path(output_path)
+    def __init__(self):
+        super().__init__('bag_collect')
         
-        # Find the .db3 file
-        self.db_file = None
-        self.original_bag_path = self.bag_path
+        # Callback group for services
+        self.service_group = ReentrantCallbackGroup()
         
-        if self.bag_path.is_file() and self.bag_path.suffix == '.db3':
-            self.db_file = self.bag_path
-        elif self.bag_path.is_file() and self.bag_path.suffix == '.zstd':
-            # Handle compressed files
-            self.db_file = self.bag_path
-        else:
-            # Look for .db3 files in directory
-            db_files = list(self.bag_path.glob('*.db3*'))
-            if db_files:
-                self.db_file = db_files[0]
+        # Load configuration
+        self.load_config()
         
-        if not self.db_file:
-            raise ValueError(f"No .db3 file found in {bag_path}")
+        # Initialize state
+        self.is_recording = False
+        self.current_session = None
+        self.session_start_time = None
+        self.last_activity_time = time.time()
+        self.recording_process = None
+        self.session_path = None
+        self.process_monitor_thread = None
         
-        # Handle compressed files
-        if self.db_file.suffix == '.zstd':
-            self.decompress_file()
+        # Topic monitoring
+        self.topic_last_received = {}
+        self.topic_message_counts = {}
         
-        # Create output directories
-        self.setup_output_directories()
+        # Quality metrics
+        self.recording_stats = {
+            'total_messages': 0,
+            'total_images': 0,
+            'total_commands': 0,
+            'session_duration': 0.0,
+            'average_fps': 0.0,
+            'storage_size_mb': 0.0
+        }
         
-        # Data storage
-        self.images_data = []
-        self.cmd_vel_data = []
-        self.cmd_vel_manual_data = []
-        self.joy_data = []
+        self.setup_subscribers()
+        self.setup_services()
+        self.setup_timers()
         
-        # Tracking
-        self.image_count = 0
-        self.bag_duration = 0
-        self.has_images = False
+        self.get_logger().info("🎬 Bag Recorder initialized (subprocess mode)")
+        self.get_logger().info(f"📁 Storage path: {self.config['storage']['base_path']}")
         
-    def decompress_file(self):
-        """Decompress .zstd file if needed."""
+    def load_config(self):
+        """Load configuration with fallback to defaults."""
+        self.config = {
+            'storage': {
+                'base_path': os.path.expanduser('~/car_datasets'),
+                'max_bagfile_size': 0,  # 0 means no limit for Foxy
+                'compression_mode': 'none',  # Foxy only supports 'none' and 'file'
+                'storage_id': 'sqlite3'
+            },
+            'quality': {
+                'min_recording_duration': 10.0,
+                'inactive_timeout': 5.0,
+                'min_linear_velocity': 0.1,
+                'min_angular_velocity': 0.05
+            },
+            'session': {
+                'use_timestamp_naming': True,
+                'session_prefix': 'behavior_',
+                'auto_start_on_joystick': True,
+                'auto_stop_on_inactive': True
+            }
+        }
+        
+        # Topics to record
+        self.topics_to_record = [
+            '/camera/image_raw',
+            '/cmd_vel_manual', 
+            '/joy',
+            '/cmd_vel'
+        ]
+        
+        # Create base directory if it doesn't exist
+        os.makedirs(self.config['storage']['base_path'], exist_ok=True)
+        
+        self.get_logger().info("✅ Configuration loaded (using defaults)")
+    
+    def setup_subscribers(self):
+        """Setup subscribers for monitoring topics."""
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+        )
+        
+        # Joy subscriber for activity monitoring
+        self.joy_sub = self.create_subscription(
+            Joy, '/joy', self.joy_callback, qos
+        )
+        
+        # Command subscriber for activity monitoring
+        self.cmd_sub = self.create_subscription(
+            Twist, '/cmd_vel_manual', self.cmd_callback, qos
+        )
+        
+        # Image subscriber for quality monitoring
+        self.img_sub = self.create_subscription(
+            Image, '/camera/image_raw', self.image_callback, qos
+        )
+        
+        self.get_logger().info("👂 Topic subscribers setup complete")
+    
+    def setup_services(self):
+        """Setup service interfaces for recording control."""
+        # Start/stop recording service
+        self.start_recording_srv = self.create_service(
+            SetBool, 'start_recording', 
+            self.start_recording_callback,
+            callback_group=self.service_group
+        )
+        
+        # Get recording status service
+        self.status_srv = self.create_service(
+            Trigger, 'recording_status',
+            self.status_callback,
+            callback_group=self.service_group
+        )
+        
+        # Stop recording service
+        self.stop_recording_srv = self.create_service(
+            Trigger, 'stop_recording',
+            self.stop_recording_callback,
+            callback_group=self.service_group
+        )
+        
+        self.get_logger().info("🔧 Services setup complete")
+    
+    def setup_timers(self):
+        """Setup periodic timers for monitoring and cleanup."""
+        # Activity monitoring timer
+        self.activity_timer = self.create_timer(1.0, self.check_activity)
+        
+        # Stats monitoring timer
+        self.stats_timer = self.create_timer(5.0, self.update_stats)
+    
+    def joy_callback(self, msg: Joy):
+        """Handle joystick messages for activity detection."""
+        self.last_activity_time = time.time()
+        
+        # Check for significant joystick input
+        if any(abs(axis) > 0.1 for axis in msg.axes) or any(msg.buttons):
+            if (self.config['session']['auto_start_on_joystick'] and 
+                not self.is_recording):
+                self.get_logger().info("🎮 Joystick activity detected - auto-starting recording")
+                self.start_recording()
+    
+    def cmd_callback(self, msg: Twist):
+        """Handle command messages for activity detection."""
+        # Check for significant movement commands
+        if (abs(msg.linear.x) > self.config['quality']['min_linear_velocity'] or
+            abs(msg.angular.z) > self.config['quality']['min_angular_velocity']):
+            self.last_activity_time = time.time()
+            
+            if self.is_recording:
+                self.recording_stats['total_commands'] += 1
+    
+    def image_callback(self, msg: Image):
+        """Handle image messages for quality monitoring."""
+        if self.is_recording:
+            self.recording_stats['total_images'] += 1
+            
+        # Update topic monitoring
+        self.topic_last_received['/camera/image_raw'] = time.time()
+        self.topic_message_counts['/camera/image_raw'] = \
+            self.topic_message_counts.get('/camera/image_raw', 0) + 1
+    
+    def check_activity(self):
+        """Check for activity and auto-stop if inactive."""
+        if not self.is_recording:
+            return
+            
+        current_time = time.time()
+        inactive_duration = current_time - self.last_activity_time
+        
+        if (self.config['session']['auto_stop_on_inactive'] and
+            inactive_duration > self.config['quality']['inactive_timeout']):
+            
+            self.get_logger().info(
+                f"⏱️  No activity for {inactive_duration:.1f}s - auto-stopping recording"
+            )
+            self.stop_recording()
+    
+    def update_stats(self):
+        """Update recording statistics."""
+        if not self.is_recording or not self.session_start_time:
+            return
+            
+        current_time = time.time()
+        self.recording_stats['session_duration'] = current_time - self.session_start_time
+        
+        # Calculate FPS
+        if self.recording_stats['session_duration'] > 0:
+            self.recording_stats['average_fps'] = (
+                self.recording_stats['total_images'] / 
+                self.recording_stats['session_duration']
+            )
+        
+        # Log stats periodically
+        if int(current_time) % 30 == 0:  # Every 30 seconds
+            self.log_stats()
+    
+    def log_stats(self):
+        """Log current recording statistics."""
+        stats = self.recording_stats
+        self.get_logger().info(
+            f"📊 Recording stats: "
+            f"{stats['session_duration']:.1f}s, "
+            f"{stats['total_images']} images, "
+            f"{stats['total_commands']} commands, "
+            f"{stats['average_fps']:.1f} fps"
+        )
+    
+    def start_recording_callback(self, request, response):
+        """Handle start recording service call."""
         try:
-            import zstandard as zstd
-            
-            decompressed_path = self.db_file.with_suffix('')  # Remove .zstd
-            
-            print(f"🗜️  Decompressing {self.db_file.name}...")
-            
-            with open(self.db_file, 'rb') as compressed_file:
-                dctx = zstd.ZstdDecompressor()
-                with open(decompressed_path, 'wb') as decompressed_file:
-                    dctx.copy_stream(compressed_file, decompressed_file)
-            
-            self.db_file = decompressed_path
-            print(f"✅ Decompressed to {self.db_file.name}")
-            
-        except ImportError:
-            print("❌ zstandard library not found. Install with: pip install zstandard")
-            print("    Or decompress manually with: zstd -d filename.db3.zstd")
-            sys.exit(1)
+            if request.data:
+                success = self.start_recording()
+                response.success = success
+                response.message = "Recording started" if success else "Failed to start recording"
+            else:
+                success = self.stop_recording()
+                response.success = success  
+                response.message = "Recording stopped" if success else "Failed to stop recording"
+                
         except Exception as e:
-            print(f"❌ Decompression failed: {e}")
-            sys.exit(1)
+            response.success = False
+            response.message = f"Error: {str(e)}"
+            
+        return response
     
-    def setup_output_directories(self):
-        """Create organized output directory structure."""
-        self.output_path.mkdir(exist_ok=True)
+    def status_callback(self, request, response):
+        """Handle status service call."""
+        response.success = True
         
-        # Create subdirectories
-        (self.output_path / "images").mkdir(exist_ok=True)
-        (self.output_path / "data").mkdir(exist_ok=True)
-        (self.output_path / "metadata").mkdir(exist_ok=True)
-        
-        print(f"📁 Output directory: {self.output_path}")
-        print(f"📁 Images will be saved to: {self.output_path}/images/")
-        print(f"📁 Data files will be saved to: {self.output_path}/data/")
-    
-    def extract_data(self):
-        """Extract all data from the bag file."""
-        print(f"🎒 Starting extraction from: {self.original_bag_path}")
-        
-        # First, extract command data from SQLite
-        success = self.extract_command_data()
-        if not success:
-            print("❌ Failed to extract command data")
-            return False
-        
-        # Then, extract images using ROS2 tools
-        if self.has_images:
-            print("\n📸 Extracting images using ROS2 tools...")
-            success = self.extract_images_ros2()
-            if not success:
-                print("⚠️  Image extraction failed, but continuing with command data")
+        if self.is_recording:
+            stats = self.recording_stats
+            response.message = (
+                f"Recording: {self.current_session}\n"
+                f"Duration: {stats['session_duration']:.1f}s\n"
+                f"Images: {stats['total_images']}\n"
+                f"Commands: {stats['total_commands']}\n"
+                f"FPS: {stats['average_fps']:.1f}"
+            )
         else:
-            print("📸 No image topic found, skipping image extraction")
-        
-        # Save all data to files
-        self.save_data_files()
-        self.create_summary()
-        
-        return True
+            response.message = "Not recording"
+            
+        return response
     
-    def extract_command_data(self):
-        """Extract command and joystick data using SQLite."""
-        print(f"🎒 Opening database: {self.db_file}")
-        
+    def stop_recording_callback(self, request, response):
+        """Handle stop recording service call."""
         try:
-            # Connect to SQLite database
-            conn = sqlite3.connect(str(self.db_file))
-            cursor = conn.cursor()
-            
-            # Get topics
-            cursor.execute("SELECT id, name, type FROM topics")
-            topics = {topic_id: {'name': name, 'type': topic_type} 
-                     for topic_id, name, topic_type in cursor.fetchall()}
-            
-            print(f"📋 Found topics: {[t['name'] for t in topics.values()]}")
-            
-            # Check if we have image topic
-            self.has_images = any(t['name'] == '/camera/image_raw' for t in topics.values())
-            
-            # Get all messages for command topics only
-            command_topics = [tid for tid, info in topics.items() 
-                            if info['name'] in ['/cmd_vel', '/cmd_vel_manual', '/joy']]
-            
-            if command_topics:
-                placeholders = ','.join(['?'] * len(command_topics))
-                cursor.execute(f"SELECT topic_id, timestamp, data FROM messages WHERE topic_id IN ({placeholders}) ORDER BY timestamp", 
-                             command_topics)
-                messages = cursor.fetchall()
-                
-                print(f"📊 Processing {len(messages)} command messages...")
-                
-                # Process each message
-                for i, (topic_id, timestamp, data) in enumerate(messages):
-                    if i % 100 == 0 and i > 0:
-                        print(f"📊 Processed {i}/{len(messages)} messages...")
-                    
-                    topic_info = topics[topic_id]
-                    topic_name = topic_info['name']
-                    
-                    try:
-                        # Process based on topic
-                        if topic_name == '/cmd_vel':
-                            self.process_twist_data(data, timestamp, 'cmd_vel')
-                        elif topic_name == '/cmd_vel_manual':
-                            self.process_twist_data(data, timestamp, 'cmd_vel_manual')
-                        elif topic_name == '/joy':
-                            self.process_joy_data_simple(data, timestamp)
-                    
-                    except Exception as e:
-                        # Silent fail for individual messages
-                        continue
-            
-            # Calculate bag duration for image extraction
-            cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM messages")
-            time_range = cursor.fetchone()
-            if time_range[0] and time_range[1]:
-                self.bag_duration = (time_range[1] - time_range[0]) / 1e9  # Convert to seconds
-                
-            conn.close()
-            print(f"✅ Successfully extracted command data")
-            print(f"   🚗 Motor commands: {len(self.cmd_vel_data)}")
-            print(f"   🎮 Manual commands: {len(self.cmd_vel_manual_data)}")
-            print(f"   🕹️  Joystick records: {len(self.joy_data)}")
-            
+            success = self.stop_recording()
+            response.success = success
+            response.message = "Recording stopped" if success else "Not recording"
         except Exception as e:
-            print(f"❌ Error reading database: {e}")
-            return False
-        
-        return True
+            response.success = False
+            response.message = f"Error: {str(e)}"
+            
+        return response
     
-    def process_twist_data(self, data, timestamp, data_type):
-        """Process Twist message data with simple CDR parsing."""
+    def start_process_monitor(self):
+        """Start a thread to monitor the recording process output."""
+        if self.process_monitor_thread and self.process_monitor_thread.is_alive():
+            return
+            
+        self.process_monitor_thread = threading.Thread(
+            target=self._monitor_process_output,
+            daemon=True
+        )
+        self.process_monitor_thread.start()
+    
+    def _monitor_process_output(self):
+        """Monitor the subprocess output in a separate thread."""
         try:
-            # Simple CDR parsing for geometry_msgs/Twist
-            # Skip CDR header (4 bytes) and read 6 doubles (48 bytes)
-            if len(data) < 52:  # 4 + 48
+            if not self.recording_process:
                 return
                 
-            # Read 6 doubles (linear.x, linear.y, linear.z, angular.x, angular.y, angular.z)
-            values = struct.unpack('<6d', data[4:52])
-            
-            twist_data = {
-                'timestamp': timestamp,
-                'linear_x': values[0],
-                'linear_y': values[1], 
-                'linear_z': values[2],
-                'angular_x': values[3],
-                'angular_y': values[4],
-                'angular_z': values[5]
-            }
-            
-            if data_type == 'cmd_vel':
-                self.cmd_vel_data.append(twist_data)
-            elif data_type == 'cmd_vel_manual':
-                self.cmd_vel_manual_data.append(twist_data)
+            # Read stdout and stderr
+            while self.recording_process.poll() is None:
+                # Check if process is still running
+                if self.recording_process.stdout:
+                    output = self.recording_process.stdout.readline()
+                    if output:
+                        self.get_logger().info(f"📝 Bag record: {output.strip()}")
                 
-        except Exception:
-            pass  # Silent fail
-    
-    def process_joy_data_simple(self, data, timestamp):
-        """Process Joy message data with simple approach."""
-        try:
-            # Very simple approach - just extract some basic joystick info
-            # This is a fallback that might not get all data but won't crash
-            joy_data = {
-                'timestamp': timestamp,
-                'axes': [0.0, 0.0, 0.0, 0.0],  # Default values
-                'buttons': [0, 0, 0, 0, 0, 0, 0, 0],  # Default values
-                'header_frame_id': ''
-            }
-            
-            # Try to extract some floats from the data (axes)
-            if len(data) > 20:
-                try:
-                    # Look for float values in the data
-                    for i in range(4, len(data) - 8, 4):
-                        val = struct.unpack('<f', data[i:i+4])[0]
-                        if -2.0 <= val <= 2.0:  # Reasonable joystick range
-                            if len(joy_data['axes']) < 4:
-                                joy_data['axes'][len(joy_data['axes'])] = val
-                except:
-                    pass
-            
-            self.joy_data.append(joy_data)
-            
-        except Exception:
-            pass  # Silent fail
-    
-    def extract_images_ros2(self):
-        """Extract images using proven manual method first, then ROS2 as fallback."""
-        try:
-            print(f"📸 Starting image extraction...")
-            print(f"   📏 Expected duration: {self.bag_duration:.1f} seconds")
-            
-            # Try the proven manual method first
-            print("🎯 Using proven extraction method (offset 56, BGR format)...")
-            success = self.extract_images_manual_enhanced()
-            if success:
-                print(f"✅ Proven method extracted {self.image_count} images successfully!")
-                return True
-            
-            # If proven method fails, try ROS2 approach as fallback
-            print("🔄 Proven method failed, trying ROS2 tools as fallback...")
-            return self.extract_images_ros2_fallback()
-            
+                time.sleep(0.1)  # Small delay to prevent busy waiting
+                
         except Exception as e:
-            print(f"❌ Image extraction failed: {e}")
-            return False
+            self.get_logger().warn(f"⚠️  Process monitor error: {e}")
     
-    def extract_images_ros2_fallback(self):
-        """Fallback ROS2 image extraction with proper Foxy syntax."""
+    def start_recording(self) -> bool:
+        """Start bag recording session using subprocess."""
+        if self.is_recording:
+            self.get_logger().warn("⚠️  Already recording")
+            return False
+            
         try:
-            print(f"🔄 Fallback: ROS2 tools extraction...")
-            
-            # Create temporary images directory
-            temp_images_dir = self.original_bag_path.parent / "temp_extracted_images"
-            temp_images_dir.mkdir(exist_ok=True)
-            
-            print(f"📁 Temporary images directory: {temp_images_dir}")
-            
-            # Try ROS2 approach with correct Foxy syntax
-            print("🔄 Using ROS2 tools with correct syntax...")
-            
-            # First start image extraction tool (before bag play)
-            extract_cmd = [
-                'ros2', 'run', 'image_view', 'extract_images',
-                '--ros-args', '--remap', 'image:=/camera/image_raw',
-                '-p', f'filename_format:={temp_images_dir}/image_%06d.png'
-            ]
-            
-            print(f"📸 Starting image extraction: {' '.join(extract_cmd)}")
-            extract_process = subprocess.Popen(
-                extract_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
+            # Create session directory
+            session_name = self.generate_session_name()
+            self.session_path = os.path.join(
+                self.config['storage']['base_path'], 
+                session_name
             )
             
-            # Give extract_images time to start up
-            time.sleep(3)
+            # Ensure directory exists
+            os.makedirs(self.session_path, exist_ok=True)
             
-            # Then start bag playback
-            bag_cmd = [
-                'ros2', 'bag', 'play', str(self.original_bag_path),
-                '--topics', '/camera/image_raw',
-                '--rate', '1.0'
-            ]
+            # Build ros2 bag record command for Foxy
+            cmd = ['ros2', 'bag', 'record', '-o', self.session_path]
             
-            print(f"🎬 Starting bag playback: {' '.join(bag_cmd)}")
-            bag_process = subprocess.Popen(
-                bag_cmd,
+            # Add storage (use -s for Foxy)
+            cmd.extend(['-s', self.config['storage']['storage_id']])
+            
+            # Only add max bag size if not 0 (Foxy uses -b)
+            if self.config['storage']['max_bagfile_size'] > 0:
+                cmd.extend(['-b', str(self.config['storage']['max_bagfile_size'])])
+            
+            # Add compression only if supported (Foxy is limited)
+            if self.config['storage']['compression_mode'] == 'file':
+                cmd.extend(['--compression-mode', 'file'])
+            
+            # Add topics
+            cmd.extend(self.topics_to_record)
+            
+            self.get_logger().info(f"🚀 Starting recording with command: {' '.join(cmd)}")
+            
+            # Start subprocess with better error handling
+            self.recording_process = subprocess.Popen(
+                cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
+                cwd=self.session_path,
+                env=os.environ.copy(),
                 text=True,
-                cwd=str(self.original_bag_path.parent)
+                bufsize=1
             )
             
-            # Monitor progress
-            wait_time = max(self.bag_duration + 10, 20)  # Give extra time
-            print(f"⏳ Monitoring extraction for {wait_time:.1f} seconds...")
+            # Wait a moment to check if process started successfully
+            time.sleep(2.0)
             
-            for i in range(int(wait_time)):
-                time.sleep(1)
-                
-                # Check if bag finished
-                if bag_process.poll() is not None:
-                    print(f"🏁 Bag playback finished at {i}s")
-                    time.sleep(2)  # Give extract_images time to process
-                    break
-                    
-                # Check progress
-                current_files = len(list(temp_images_dir.glob('*.png')))
-                if i % 5 == 0 and current_files > 0:
-                    print(f"📸 Progress: {current_files} images extracted...")
-                elif i % 10 == 0:
-                    print(f"⏳ Still waiting... ({i}s)")
-            
-            # Stop processes gracefully
-            print("🛑 Stopping processes...")
-            try:
-                if bag_process.poll() is None:
-                    bag_process.terminate()
-                    time.sleep(2)
-                    if bag_process.poll() is None:
-                        bag_process.kill()
-                        
-                if extract_process.poll() is None:
-                    extract_process.terminate()
-                    time.sleep(2)
-                    if extract_process.poll() is None:
-                        extract_process.kill()
-            except:
-                pass
-            
-            # Check results
-            extracted_files = list(temp_images_dir.glob('*.png'))
-            print(f"📸 Found {len(extracted_files)} extracted images")
-            
-            if extracted_files:
-                # Process extracted images
-                return self.process_extracted_images(extracted_files, temp_images_dir)
-            else:
-                print("❌ ROS2 fallback method also failed")
-                return False
-                
-        except Exception as e:
-            print(f"❌ ROS2 fallback failed: {e}")
-            return False
-    
-    def try_alternative_extraction(self):
-        """Try alternative image extraction methods."""
-        print("🔄 Trying alternative extraction methods...")
-        
-        # Method 1: Simple ros2 bag play to file
-        try:
-            print("📝 Method 1: Play bag and save to video...")
-            temp_dir = self.original_bag_path.parent / "temp_video"
-            temp_dir.mkdir(exist_ok=True)
-            
-            # Try to record video using gstreamer
-            record_cmd = [
-                'ros2', 'bag', 'play', str(self.original_bag_path),
-                '--topics', '/camera/image_raw'
-            ]
-            
-            # Start bag play in background and try to capture
-            # This is a simpler approach - just get the first few frames
-            
-            print("🎬 Playing bag for video capture...")
-            process = subprocess.Popen(record_cmd, cwd=str(self.original_bag_path.parent))
-            
-            # Let it run briefly
-            time.sleep(min(self.bag_duration + 2, 10))
-            
-            # Stop it
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except:
-                process.kill()
-            
-        except Exception as e:
-            print(f"📝 Video method failed: {e}")
-        
-        # Method 2: Enhanced manual extraction
-        print("🔧 Method 2: Enhanced manual extraction...")
-        return self.extract_images_manual_enhanced()
-    
-    def extract_images_manual_enhanced(self):
-        """Enhanced manual image extraction with the proven format (offset 56)."""
-        try:
-            print("🔧 Starting proven manual extraction method...")
-            
-            conn = sqlite3.connect(str(self.db_file))
-            cursor = conn.cursor()
-            
-            # Get image topic ID
-            cursor.execute("SELECT id FROM topics WHERE name = '/camera/image_raw'")
-            result = cursor.fetchone()
-            if not result:
-                print("❌ No camera topic found")
-                return False
-                
-            image_topic_id = result[0]
-            
-            # Get all image messages
-            cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = ? ORDER BY timestamp", 
-                         (image_topic_id,))
-            image_messages = cursor.fetchall()
-            
-            print(f"📸 Processing {len(image_messages)} image messages with proven format...")
-            
-            if len(image_messages) == 0:
+            if self.recording_process.poll() is not None:
+                # Process has already terminated
+                stdout, stderr = self.recording_process.communicate()
+                self.get_logger().error(f"❌ Recording process failed to start:")
+                self.get_logger().error(f"STDOUT: {stdout}")
+                self.get_logger().error(f"STDERR: {stderr}")
                 return False
             
-            # Use the proven format: offset 56, size 921600, 640x480x3 BGR
-            IMAGE_DATA_OFFSET = 56
-            IMAGE_SIZE = 921600  # 640 * 480 * 3
-            WIDTH = 640
-            HEIGHT = 480
+            # Start a thread to monitor the process output
+            self.start_process_monitor()
             
-            extracted_count = 0
-            failed_count = 0
+            # Update state
+            self.is_recording = True
+            self.current_session = session_name
+            self.session_start_time = time.time()
+            self.last_activity_time = time.time()
             
-            for i, (timestamp, data) in enumerate(image_messages):
-                if i % 50 == 0:
-                    print(f"📸 Processing {i+1}/{len(image_messages)} images...")
-                
-                try:
-                    # Check if we have enough data
-                    if len(data) >= IMAGE_DATA_OFFSET + IMAGE_SIZE:
-                        # Extract image data using proven format
-                        img_data = data[IMAGE_DATA_OFFSET:IMAGE_DATA_OFFSET + IMAGE_SIZE]
-                        
-                        # Reshape to BGR image
-                        img_array = np.frombuffer(img_data, dtype=np.uint8)
-                        img = img_array.reshape((HEIGHT, WIDTH, 3))
-                        
-                        # Save image
-                        filename = f"image_{extracted_count:06d}.png"
-                        filepath = self.output_path / "images" / filename
-                        
-                        if cv2.imwrite(str(filepath), img):
-                            # Add to metadata
-                            self.images_data.append({
-                                'filename': filename,
-                                'timestamp': timestamp,
-                                'width': WIDTH,
-                                'height': HEIGHT,
-                                'encoding': 'bgr8',
-                                'frame_id': 'camera_link',
-                                'seq': extracted_count
-                            })
-                            extracted_count += 1
-                        else:
-                            failed_count += 1
-                    else:
-                        failed_count += 1
-                        
-                except Exception as e:
-                    failed_count += 1
-                    continue
+            # Reset stats
+            self.recording_stats = {
+                'total_messages': 0,
+                'total_images': 0,
+                'total_commands': 0,
+                'session_duration': 0.0,
+                'average_fps': 0.0,
+                'storage_size_mb': 0.0
+            }
             
-            conn.close()
+            # Save session metadata
+            self.save_session_metadata()
             
-            if extracted_count > 0:
-                print(f"✅ Proven method successful: {extracted_count} images extracted")
-                if failed_count > 0:
-                    print(f"⚠️  {failed_count} images failed to extract")
-                self.image_count = extracted_count
-                return True
-            else:
-                print("❌ Proven method failed - no images extracted")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Proven extraction error: {e}")
-            return False
-    
-    def analyze_image_format(self, data):
-        """Analyze CDR data to determine image format."""
-        try:
-            if len(data) < 100:
-                return None
-            
-            # Skip CDR header (4 bytes) and parse sensor_msgs/Image header
-            pos = 4
-            
-            # Skip header timestamp and frame_id (rough estimate)
-            pos += 12  # timestamp
-            
-            # Try to read string length for frame_id
-            if pos + 4 < len(data):
-                frame_id_len = struct.unpack('<I', data[pos:pos+4])[0]
-                pos += 4 + ((frame_id_len + 3) // 4) * 4  # Align to 4 bytes
-            
-            # Read image dimensions
-            if pos + 8 < len(data):
-                height = struct.unpack('<I', data[pos:pos+4])[0]
-                width = struct.unpack('<I', data[pos+4:pos+8])[0]
-                pos += 8
-                
-                # Skip encoding string
-                if pos + 4 < len(data):
-                    encoding_len = struct.unpack('<I', data[pos:pos+4])[0]
-                    pos += 4 + ((encoding_len + 3) // 4) * 4
-                
-                # Skip is_bigendian and step
-                pos += 8
-                
-                # Get data array size
-                if pos + 4 < len(data):
-                    data_len = struct.unpack('<I', data[pos:pos+4])[0]
-                    pos += 4
-                    
-                    # Determine channels based on data size
-                    expected_size_rgb = height * width * 3
-                    expected_size_bgr = height * width * 3
-                    expected_size_mono = height * width
-                    
-                    if data_len == expected_size_rgb or data_len == expected_size_bgr:
-                        return {
-                            'width': width,
-                            'height': height,
-                            'channels': 3,
-                            'encoding': 'bgr8',
-                            'data_offset': pos,
-                            'data_size': data_len
-                        }
-                    elif data_len == expected_size_mono:
-                        return {
-                            'width': width,
-                            'height': height,
-                            'channels': 1,
-                            'encoding': 'mono8',
-                            'data_offset': pos,
-                            'data_size': data_len
-                        }
-            
-            return None
-            
-        except Exception as e:
-            print(f"🔍 Format analysis error: {e}")
-            return None
-    
-    def extract_single_image(self, data, config):
-        """Extract a single image using the detected format."""
-        try:
-            offset = config['data_offset']
-            size = config['data_size']
-            
-            if len(data) < offset + size:
-                return None
-            
-            # Extract image data
-            img_data = data[offset:offset + size]
-            img_array = np.frombuffer(img_data, dtype=np.uint8)
-            
-            # Reshape to image
-            if config['channels'] == 3:
-                img = img_array.reshape((config['height'], config['width'], 3))
-                # Convert RGB to BGR if needed (OpenCV uses BGR)
-                if config['encoding'] == 'rgb8':
-                    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            else:
-                img = img_array.reshape((config['height'], config['width']))
-            
-            return img
-            
-        except Exception as e:
-            return None
-    
-    def process_extracted_images(self, extracted_files, temp_dir):
-        """Process successfully extracted images from ROS2 tools."""
-        try:
-            print(f"📸 Processing {len(extracted_files)} extracted images...")
-            
-            for i, img_file in enumerate(sorted(extracted_files)):
-                final_name = f"image_{i:06d}.png"
-                final_path = self.output_path / "images" / final_name
-                
-                # Move file
-                img_file.rename(final_path)
-                
-                # Get image info
-                img = cv2.imread(str(final_path))
-                height, width = img.shape[:2] if img is not None else (480, 640)
-                
-                # Add to metadata
-                self.images_data.append({
-                    'filename': final_name,
-                    'timestamp': 0,
-                    'width': width,
-                    'height': height,
-                    'encoding': 'bgr8',
-                    'frame_id': 'camera',
-                    'seq': i
-                })
-            
-            self.image_count = len(extracted_files)
-            print(f"✅ Successfully processed {self.image_count} images")
-            
-            # Cleanup temp directory
-            try:
-                import shutil
-                shutil.rmtree(temp_dir)
-            except:
-                pass
+            self.get_logger().info(f"🎬 Recording started: {session_name}")
+            self.get_logger().info(f"📁 Path: {self.session_path}")
+            self.get_logger().info(f"📋 Topics: {len(self.topics_to_record)}")
             
             return True
             
         except Exception as e:
-            print(f"❌ Error processing extracted images: {e}")
+            self.get_logger().error(f"❌ Failed to start recording: {e}")
+            self.is_recording = False
+            self.current_session = None
             return False
     
-    def save_data_files(self):
-        """Save all extracted data to CSV and JSON files."""
-        print("💾 Saving data files...")
-        
-        # Save images metadata
-        if self.images_data:
-            with open(self.output_path / "data" / "images.csv", 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=self.images_data[0].keys())
-                writer.writeheader()
-                writer.writerows(self.images_data)
+    def stop_recording(self) -> bool:
+        """Stop current recording session."""
+        if not self.is_recording:
+            self.get_logger().warn("⚠️  Not currently recording")
+            return False
             
-            with open(self.output_path / "data" / "images.json", 'w') as f:
-                json.dump(self.images_data, f, indent=2)
+        try:
+            # Stop subprocess
+            if self.recording_process and self.recording_process.poll() is None:
+                self.get_logger().info("🛑 Stopping recording process...")
+                self.recording_process.terminate()
+                
+                # Give it some time to terminate gracefully
+                try:
+                    self.recording_process.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    self.get_logger().warn("⚠️  Recording process didn't stop gracefully, killing...")
+                    self.recording_process.kill()
+                    self.recording_process.wait()
             
-            print(f"📸 Saved {len(self.images_data)} image records")
-        
-        # Save cmd_vel data
-        if self.cmd_vel_data:
-            with open(self.output_path / "data" / "cmd_vel.csv", 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=self.cmd_vel_data[0].keys())
-                writer.writeheader()
-                writer.writerows(self.cmd_vel_data)
+            # Calculate final stats
+            if self.session_start_time:
+                final_duration = time.time() - self.session_start_time
+                self.recording_stats['session_duration'] = final_duration
+                
+                # Check minimum duration
+                if final_duration < self.config['quality']['min_recording_duration']:
+                    self.get_logger().warn(
+                        f"⚠️  Short recording: {final_duration:.1f}s "
+                        f"(min: {self.config['quality']['min_recording_duration']}s)"
+                    )
             
-            with open(self.output_path / "data" / "cmd_vel.json", 'w') as f:
-                json.dump(self.cmd_vel_data, f, indent=2)
+            # Update session metadata with final stats
+            if self.session_path:
+                self.update_session_metadata()
             
-            print(f"🚗 Saved {len(self.cmd_vel_data)} cmd_vel records")
-        
-        # Save cmd_vel_manual data
-        if self.cmd_vel_manual_data:
-            with open(self.output_path / "data" / "cmd_vel_manual.csv", 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=self.cmd_vel_manual_data[0].keys())
-                writer.writeheader()
-                writer.writerows(self.cmd_vel_manual_data)
+            # Log final stats
+            self.log_final_stats()
             
-            with open(self.output_path / "data" / "cmd_vel_manual.json", 'w') as f:
-                json.dump(self.cmd_vel_manual_data, f, indent=2)
+            # Reset state
+            self.is_recording = False
+            session_name = self.current_session
+            self.current_session = None
+            self.session_start_time = None
+            self.recording_process = None
             
-            print(f"🎮 Saved {len(self.cmd_vel_manual_data)} cmd_vel_manual records")
-        
-        # Save joy data
-        if self.joy_data:
-            with open(self.output_path / "data" / "joy.csv", 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['timestamp', 'axes', 'buttons', 'header_frame_id'])
-                writer.writeheader()
-                for row in self.joy_data:
-                    csv_row = row.copy()
-                    csv_row['axes'] = str(row['axes'])
-                    csv_row['buttons'] = str(row['buttons'])
-                    writer.writerow(csv_row)
+            self.get_logger().info(f"🏁 Recording stopped: {session_name}")
             
-            with open(self.output_path / "data" / "joy.json", 'w') as f:
-                json.dump(self.joy_data, f, indent=2)
+            return True
             
-            print(f"🕹️  Saved {len(self.joy_data)} joystick records")
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to stop recording: {e}")
+            return False
     
-    def create_summary(self):
-        """Create a summary of extracted data."""
-        summary = {
-            'extraction_info': {
-                'bag_path': str(self.bag_path),
-                'output_path': str(self.output_path),
-                'extraction_time': datetime.now().isoformat(),
-                'extractor_version': '3.0_integrated',
-                'bag_duration_seconds': self.bag_duration
-            },
-            'data_summary': {
-                'total_images': len(self.images_data),
-                'total_cmd_vel': len(self.cmd_vel_data),
-                'total_cmd_vel_manual': len(self.cmd_vel_manual_data),
-                'total_joy': len(self.joy_data)
-            },
-            'extraction_methods': {
-                'commands': 'SQLite direct access',
-                'images': 'ROS2 bag play + image_view',
-                'joystick': 'SQLite simple parsing'
+    def generate_session_name(self) -> str:
+        """Generate unique session name."""
+        if self.config['session']['use_timestamp_naming']:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            return f"{self.config['session']['session_prefix']}{timestamp}"
+        else:
+            # Find next available session number
+            base_path = self.config['storage']['base_path']
+            prefix = self.config['session']['session_prefix']
+            
+            session_num = 1
+            while True:
+                session_name = f"{prefix}{session_num:04d}"
+                session_path = os.path.join(base_path, session_name)
+                if not os.path.exists(session_path):
+                    return session_name
+                session_num += 1
+    
+    def save_session_metadata(self):
+        """Save session metadata to JSON file."""
+        try:
+            metadata = {
+                'session_info': {
+                    'session_name': self.current_session,
+                    'start_time': datetime.now().isoformat(),
+                    'start_timestamp': self.session_start_time,
+                    'topics': self.topics_to_record
+                },
+                'system_info': {
+                    'ros_distro': os.environ.get('ROS_DISTRO', 'unknown'),
+                    'hostname': os.uname().nodename,
+                    'platform': os.uname().sysname,
+                    'python_version': f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
+                },
+                'config': self.config,
+                'statistics': self.recording_stats.copy()
             }
-        }
-        
-        # Add timing analysis
-        if self.cmd_vel_manual_data:
-            timestamps = [cmd['timestamp'] for cmd in self.cmd_vel_manual_data]
-            summary['timing_analysis'] = {
-                'start_time': min(timestamps),
-                'end_time': max(timestamps),
-                'duration_ns': max(timestamps) - min(timestamps),
-                'duration_seconds': (max(timestamps) - min(timestamps)) / 1e9,
-                'command_frequency': len(timestamps) / ((max(timestamps) - min(timestamps)) / 1e9)
-            }
-        
-        # Save summary
-        with open(self.output_path / "metadata" / "extraction_summary.json", 'w') as f:
-            json.dump(summary, f, indent=2)
-        
-        # Print summary
-        print("\n📊 EXTRACTION SUMMARY:")
-        print(f"Images extracted: {summary['data_summary']['total_images']}")
-        print(f"Motor commands: {summary['data_summary']['total_cmd_vel']}")
-        print(f"Manual commands: {summary['data_summary']['total_cmd_vel_manual']}")
-        print(f"Joystick records: {summary['data_summary']['total_joy']}")
-        
-        if 'timing_analysis' in summary:
-            print(f"Duration: {summary['timing_analysis']['duration_seconds']:.2f} seconds")
-            print(f"Command frequency: {summary['timing_analysis']['command_frequency']:.2f} Hz")
-        
-        print(f"\n📁 All data saved to: {self.output_path}")
-        
-        # Print file structure
-        print(f"\n📋 File structure:")
-        print(f"├── images/ ({len(self.images_data)} PNG files)")
-        print(f"├── data/ (CSV and JSON files)")
-        print(f"└── metadata/ (extraction summary)")
+            
+            metadata_path = os.path.join(self.session_path, 'metadata.json')
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+                
+            self.get_logger().info(f"💾 Metadata saved: {metadata_path}")
+            
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to save metadata: {e}")
+    
+    def update_session_metadata(self):
+        """Update session metadata with final statistics."""
+        try:
+            metadata_path = os.path.join(self.session_path, 'metadata.json')
+            
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+            
+            # Update with final stats
+            metadata['session_info']['end_time'] = datetime.now().isoformat()
+            metadata['session_info']['duration_seconds'] = self.recording_stats['session_duration']
+            metadata['statistics'] = self.recording_stats.copy()
+            
+            # Calculate storage size
+            storage_size = self.calculate_directory_size(self.session_path)
+            metadata['statistics']['storage_size_mb'] = storage_size / (1024 * 1024)
+            
+            # Save updated metadata
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+                
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to update metadata: {e}")
+    
+    def calculate_directory_size(self, directory: str) -> int:
+        """Calculate total size of directory in bytes."""
+        total_size = 0
+        try:
+            for dirpath, dirnames, filenames in os.walk(directory):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    total_size += os.path.getsize(filepath)
+        except Exception as e:
+            self.get_logger().warn(f"⚠️  Failed to calculate directory size: {e}")
+        return total_size
+    
+    def log_final_stats(self):
+        """Log final recording statistics."""
+        stats = self.recording_stats
+        self.get_logger().info("📊 Final Recording Statistics:")
+        self.get_logger().info(f"  Duration: {stats['session_duration']:.1f} seconds")
+        self.get_logger().info(f"  Images: {stats['total_images']}")
+        self.get_logger().info(f"  Commands: {stats['total_commands']}")
+        self.get_logger().info(f"  Average FPS: {stats['average_fps']:.1f}")
+    
+    def destroy_node(self):
+        """Clean shutdown of the node."""
+        if self.is_recording:
+            self.get_logger().info("🛑 Stopping recording due to shutdown...")
+            self.stop_recording()
+        super().destroy_node()
 
 
-def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(description='Extract data from ROS2 bag files (Integrated approach)')
-    parser.add_argument('bag_path', help='Path to the bag directory or .db3 file')
-    parser.add_argument('-o', '--output', help='Output directory (default: bag_path + _extracted)')
-    
-    args = parser.parse_args()
-    
-    # Set default output path
-    if args.output:
-        output_path = args.output
-    else:
-        bag_name = Path(args.bag_path).stem
-        if bag_name.endswith('_0'):
-            bag_name = bag_name[:-2]  # Remove _0 suffix
-        output_path = Path(args.bag_path).parent / f"{bag_name}_extracted"
-    
-    print("🎒 Integrated ROS2 Bag Data Extractor")
-    print(f"Input: {args.bag_path}")
-    print(f"Output: {output_path}")
-    print("-" * 50)
+def main(args=None):
+    """Main entry point for the bag recorder node."""
+    rclpy.init(args=args)
     
     try:
-        # Extract data
-        extractor = IntegratedBagExtractor(args.bag_path, output_path)
-        success = extractor.extract_data()
+        node = BagRecorder()
         
-        if success:
-            print("\n✅ Extraction completed successfully!")
-            print("\n🎯 Ready for behavior cloning!")
-            print("   📸 Images: Visual input for neural networks")
-            print("   🎮 Manual commands: Training labels (what you wanted)")
-            print("   🚗 Motor commands: Actual outputs (what robot did)")
-        else:
-            print("\n❌ Extraction failed!")
-            return 1
-            
+        # Handle shutdown gracefully
+        def signal_handler(signum, frame):
+            node.get_logger().info("🛑 Shutdown signal received")
+            node.destroy_node()
+            rclpy.shutdown()
+        
+        import signal
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Spin the node
+        rclpy.spin(node)
+        
+    except KeyboardInterrupt:
+        pass
     except Exception as e:
-        print(f"\n❌ Error: {e}")
-        return 1
-    
-    return 0
+        print(f"❌ Error in bag recorder: {e}")
+    finally:
+        try:
+            node.destroy_node()
+        except:
+            pass
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()
