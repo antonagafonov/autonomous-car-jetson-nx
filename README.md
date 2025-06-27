@@ -455,3 +455,9 @@ ros2 param set /motor_controller pin_mode BOARD
 ```bash
 # Set camera resolution (native sensor resolution)
 ros2 param set /camera_node camera
+
+### Test camera in gui
+
+gst-launch-1.0 nvarguscamerasrc ! \
+'video/x-raw(memory:NVMM), width=1280, height=720, format=NV12' ! \
+nvvidconv ! 'video/x-raw, format=RGBA' ! glimagesink
