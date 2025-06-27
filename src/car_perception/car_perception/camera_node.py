@@ -56,7 +56,7 @@ class CameraNode(Node):
         self.declare_parameter('output_width', 1280)    # Desired output resolution
         self.declare_parameter('output_height', 720)    # Desired output resolution
         self.declare_parameter('framerate', 30)         # Reduced from 40 for stability
-        self.declare_parameter('flip_method', 2)        # 180 degree flip
+        self.declare_parameter('flip_method', 0)        # 180 degree flip
         self.declare_parameter('camera_id', 0)
         
         self.camera_width = self.get_parameter('camera_width').value
