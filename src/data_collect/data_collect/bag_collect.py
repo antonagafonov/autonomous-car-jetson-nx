@@ -50,6 +50,8 @@ class BagRecorder(Node):
         self.recording_process = None
         self.session_path = None
         self.process_monitor_thread = None
+        self.failed_attempts = 0
+        self.last_failure_time = 0
         
         # Topic monitoring
         self.topic_last_received = {}
@@ -72,14 +74,41 @@ class BagRecorder(Node):
         self.get_logger().info("🎬 Bag Recorder initialized (subprocess mode)")
         self.get_logger().info(f"📁 Storage path: {self.config['storage']['base_path']}")
         
+    def start_process_monitor(self):
+        """Start a thread to monitor the recording process output."""
+        def monitor_process():
+            if not self.recording_process:
+                return
+                
+            try:
+                # Monitor stderr for errors
+                while self.recording_process.poll() is None:
+                    if self.recording_process.stderr:
+                        line = self.recording_process.stderr.readline()
+                        if line:
+                            self.get_logger().warn(f"📦 Bag record stderr: {line.strip()}")
+                    time.sleep(0.1)
+                    
+                # Check final exit status
+                exit_code = self.recording_process.returncode
+                if exit_code != 0:
+                    stdout, stderr = self.recording_process.communicate()
+                    self.get_logger().error(f"❌ Recording process exited with code {exit_code}")
+                    self.get_logger().error(f"STDERR: {stderr}")
+                    
+            except Exception as e:
+                self.get_logger().error(f"❌ Error monitoring process: {e}")
+        
+        self.process_monitor_thread = threading.Thread(target=monitor_process, daemon=True)
+        self.process_monitor_thread.start()
+    
     def load_config(self):
         """Load configuration with fallback to defaults."""
         self.config = {
             'storage': {
                 'base_path': os.path.expanduser('~/car_datasets'),
-                'max_bagfile_size': 0,  # 0 means no limit for Foxy
-                'compression_mode': 'none',  # Foxy only supports 'none' and 'file'
-                'storage_id': 'sqlite3'
+                'max_bagfile_size': '1GB',
+                'storage_id': 'sqlite3'  # This is the correct default
             },
             'quality': {
                 'min_recording_duration': 10.0,
@@ -174,6 +203,13 @@ class BagRecorder(Node):
         if any(abs(axis) > 0.1 for axis in msg.axes) or any(msg.buttons):
             if (self.config['session']['auto_start_on_joystick'] and 
                 not self.is_recording):
+                
+                # Prevent rapid restart attempts after failures
+                current_time = time.time()
+                if (self.failed_attempts > 0 and 
+                    current_time - self.last_failure_time < 10.0):
+                    return  # Wait 10 seconds after failure before trying again
+                
                 self.get_logger().info("🎮 Joystick activity detected - auto-starting recording")
                 self.start_recording()
     
@@ -291,36 +327,6 @@ class BagRecorder(Node):
             
         return response
     
-    def start_process_monitor(self):
-        """Start a thread to monitor the recording process output."""
-        if self.process_monitor_thread and self.process_monitor_thread.is_alive():
-            return
-            
-        self.process_monitor_thread = threading.Thread(
-            target=self._monitor_process_output,
-            daemon=True
-        )
-        self.process_monitor_thread.start()
-    
-    def _monitor_process_output(self):
-        """Monitor the subprocess output in a separate thread."""
-        try:
-            if not self.recording_process:
-                return
-                
-            # Read stdout and stderr
-            while self.recording_process.poll() is None:
-                # Check if process is still running
-                if self.recording_process.stdout:
-                    output = self.recording_process.stdout.readline()
-                    if output:
-                        self.get_logger().info(f"📝 Bag record: {output.strip()}")
-                
-                time.sleep(0.1)  # Small delay to prevent busy waiting
-                
-        except Exception as e:
-            self.get_logger().warn(f"⚠️  Process monitor error: {e}")
-    
     def start_recording(self) -> bool:
         """Start bag recording session using subprocess."""
         if self.is_recording:
@@ -328,31 +334,37 @@ class BagRecorder(Node):
             return False
             
         try:
-            # Create session directory
+            # Create session directory path but DON'T create it yet
+            # ros2 bag record will create the directory
             session_name = self.generate_session_name()
             self.session_path = os.path.join(
                 self.config['storage']['base_path'], 
                 session_name
             )
             
-            # Ensure directory exists
-            os.makedirs(self.session_path, exist_ok=True)
+            # Ensure base directory exists (but not the session directory)
+            os.makedirs(self.config['storage']['base_path'], exist_ok=True)
             
-            # Build ros2 bag record command for Foxy
-            cmd = ['ros2', 'bag', 'record', '-o', self.session_path]
+            # Build ros2 bag record command with proper Foxy arguments
+            cmd = [
+                'ros2', 'bag', 'record',
+                '-o', self.session_path  # ros2 bag will create this directory
+            ]
             
-            # Add storage (use -s for Foxy)
-            cmd.extend(['-s', self.config['storage']['storage_id']])
+            # Try to add compression if available
+            try:
+                # Test compression support
+                test_cmd = ['ros2', 'bag', 'record', '--compression-mode', 'file', '--help']
+                result = subprocess.run(test_cmd, capture_output=True, timeout=3)
+                if result.returncode == 0:
+                    cmd.extend(['--compression-mode', 'file', '--compression-format', 'zstd'])
+                    self.get_logger().info("✅ Using compression")
+                else:
+                    self.get_logger().warn("⚠️  Compression not available, using uncompressed")
+            except:
+                self.get_logger().warn("⚠️  Could not test compression, using uncompressed")
             
-            # Only add max bag size if not 0 (Foxy uses -b)
-            if self.config['storage']['max_bagfile_size'] > 0:
-                cmd.extend(['-b', str(self.config['storage']['max_bagfile_size'])])
-            
-            # Add compression only if supported (Foxy is limited)
-            if self.config['storage']['compression_mode'] == 'file':
-                cmd.extend(['--compression-mode', 'file'])
-            
-            # Add topics
+            # Add topics to record
             cmd.extend(self.topics_to_record)
             
             self.get_logger().info(f"🚀 Starting recording with command: {' '.join(cmd)}")
@@ -362,7 +374,7 @@ class BagRecorder(Node):
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=self.session_path,
+                cwd=self.config['storage']['base_path'],  # Run from base directory
                 env=os.environ.copy(),
                 text=True,
                 bufsize=1
@@ -377,10 +389,18 @@ class BagRecorder(Node):
                 self.get_logger().error(f"❌ Recording process failed to start:")
                 self.get_logger().error(f"STDOUT: {stdout}")
                 self.get_logger().error(f"STDERR: {stderr}")
+                
+                # Track failure
+                self.failed_attempts += 1
+                self.last_failure_time = time.time()
+                
                 return False
             
             # Start a thread to monitor the process output
             self.start_process_monitor()
+            
+            # Reset failure counter on successful start
+            self.failed_attempts = 0
             
             # Update state
             self.is_recording = True
@@ -398,8 +418,8 @@ class BagRecorder(Node):
                 'storage_size_mb': 0.0
             }
             
-            # Save session metadata
-            self.save_session_metadata()
+            # Save session metadata after a short delay to let ros2 bag create the directory
+            self.create_timer(3.0, self.save_session_metadata_delayed)
             
             self.get_logger().info(f"🎬 Recording started: {session_name}")
             self.get_logger().info(f"📁 Path: {self.session_path}")
@@ -447,6 +467,9 @@ class BagRecorder(Node):
             
             # Update session metadata with final stats
             if self.session_path:
+                # Make sure we have proper ROS2 metadata
+                self.create_ros2_metadata_if_missing()
+                # Update our custom metadata
                 self.update_session_metadata()
             
             # Log final stats
@@ -484,6 +507,144 @@ class BagRecorder(Node):
                 if not os.path.exists(session_path):
                     return session_name
                 session_num += 1
+    
+    def save_session_metadata_delayed(self):
+        """Save session metadata after ros2 bag has created the directory."""
+        try:
+            # Check if directory was created by ros2 bag
+            if os.path.exists(self.session_path):
+                # First create the ROS2 metadata.yaml if it doesn't exist
+                self.create_ros2_metadata_if_missing()
+                
+                # Then save our custom metadata
+                self.save_session_metadata()
+                self.get_logger().info(f"💾 Metadata saved: {self.session_path}/metadata.json")
+            else:
+                # Try again in a few seconds
+                self.create_timer(2.0, self.save_session_metadata_delayed)
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to save delayed metadata: {e}")
+    
+    def create_ros2_metadata_if_missing(self):
+        """Create metadata.yaml if ros2 bag didn't create it."""
+        metadata_yaml_path = os.path.join(self.session_path, 'metadata.yaml')
+        
+        if not os.path.exists(metadata_yaml_path):
+            try:
+                # Get the actual bag file name
+                bag_files = [f for f in os.listdir(self.session_path) if f.endswith('.db3')]
+                
+                if bag_files:
+                    bag_file = bag_files[0]  # Use the first bag file
+                    
+                    # Query the database for actual information
+                    db_path = os.path.join(self.session_path, bag_file)
+                    
+                    # Get basic info from the database
+                    import sqlite3
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    
+                    # Get topics
+                    cursor.execute("SELECT name, type FROM topics")
+                    topics_data = cursor.fetchall()
+                    
+                    # Get message counts
+                    cursor.execute("SELECT topic_id, COUNT(*) FROM messages GROUP BY topic_id")
+                    message_counts = dict(cursor.fetchall())
+                    
+                    # Get time range
+                    cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM messages")
+                    time_range = cursor.fetchone()
+                    
+                    conn.close()
+                    
+                    # Create metadata.yaml content
+                    topics_with_counts = []
+                    total_messages = 0
+                    
+                    for i, (topic_name, topic_type) in enumerate(topics_data):
+                        count = message_counts.get(i + 1, 0)  # topic_id starts from 1
+                        total_messages += count
+                        
+                        # Correct YAML structure for topics_with_message_count
+                        topic_entry = {
+                            'topic_metadata': {
+                                'name': topic_name,
+                                'type': topic_type,
+                                'serialization_format': 'cdr'
+                            },
+                            'message_count': count
+                        }
+                        topics_with_counts.append(topic_entry)
+                    
+                    # Calculate duration
+                    start_time = time_range[0] if time_range[0] else 0
+                    end_time = time_range[1] if time_range[1] else 0
+                    duration = end_time - start_time
+                    
+                    # Create the metadata structure
+                    metadata = {
+                        'rosbag2_bagfile_information': {
+                            'version': 4,
+                            'storage_identifier': 'sqlite3',
+                            'relative_file_paths': [bag_file],
+                            'duration': {
+                                'nanoseconds': int(duration)
+                            },
+                            'starting_time': {
+                                'nanoseconds_since_epoch': int(start_time)
+                            },
+                            'message_count': total_messages,
+                            'topics_with_message_count': topics_with_counts,
+                            'compression_format': '',
+                            'compression_mode': ''
+                        }
+                    }
+                    
+                    # Write metadata.yaml with proper formatting
+                    import yaml
+                    with open(metadata_yaml_path, 'w') as f:
+                        yaml.dump(metadata, f, default_flow_style=False, indent=2, sort_keys=False)
+                    
+                    self.get_logger().info(f"✅ Created metadata.yaml with {total_messages} messages")
+                    
+                else:
+                    self.get_logger().warn("⚠️  No .db3 files found in recording directory")
+                    
+            except Exception as e:
+                self.get_logger().error(f"❌ Failed to create metadata.yaml: {e}")
+                # Create a minimal fallback metadata.yaml
+                self.create_minimal_metadata_yaml(metadata_yaml_path)
+    
+    def create_minimal_metadata_yaml(self, metadata_yaml_path):
+        """Create a minimal metadata.yaml as fallback."""
+        try:
+            bag_files = [f for f in os.listdir(self.session_path) if f.endswith('.db3')]
+            bag_file = bag_files[0] if bag_files else 'rosbag2_0.db3'
+            
+            minimal_metadata = {
+                'rosbag2_bagfile_information': {
+                    'version': 4,
+                    'storage_identifier': 'sqlite3',
+                    'relative_file_paths': [bag_file],
+                    'duration': {'nanoseconds': 0},
+                    'starting_time': {'nanoseconds_since_epoch': 0},
+                    'message_count': 0,
+                    'topics_with_message_count': [],
+                    'compression_format': '',
+                    'compression_mode': ''
+                }
+            }
+            
+            import yaml
+            with open(metadata_yaml_path, 'w') as f:
+                yaml.dump(minimal_metadata, f, default_flow_style=False)
+                
+            self.get_logger().info("✅ Created minimal metadata.yaml")
+            
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to create minimal metadata.yaml: {e}")
     
     def save_session_metadata(self):
         """Save session metadata to JSON file."""
