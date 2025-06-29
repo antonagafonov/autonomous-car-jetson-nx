@@ -1,9 +1,4 @@
-### System Monitoring and Control
-
-**Check recording status:**
-```bash
-# Get current recording status and statistics
-ros2 service call /recording_sta# 🚗 Autonomous Car Project - Jetson Xavier NX
+🚗 Autonomous Car Project - Jetson Xavier NX
 
 ![ROS2](https://img.shields.io/badge/ROS2-Foxy-blue)
 ![Platform](https://img.shields.io/badge/Platform-Jetson%20Xavier%20NX-green)
