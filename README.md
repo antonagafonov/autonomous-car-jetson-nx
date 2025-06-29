@@ -648,11 +648,10 @@ du -sh ~/car_datasets/*
 ## 🚧 Future Roadmap
 
 - [ ] **Lane Detection**: OpenCV-based lane following
+- [ ] **DEEP Lane Detection**: RESNET18-based lane following
 - [ ] **Object Detection**: YOLO-based obstacle detection
-- [ ] **Autonomous Navigation**: GPS waypoint following
 - [ ] **SLAM Integration**: Mapping and localization
 - [ ] **Web Interface**: Remote monitoring and control
-- [ ] **ROS2 Galactic/Humble**: Upgrade to newer ROS2 versions
 - [ ] **Docker Support**: Containerized deployment
 - [ ] **CI/CD Pipeline**: Automated testing and deployment
 
