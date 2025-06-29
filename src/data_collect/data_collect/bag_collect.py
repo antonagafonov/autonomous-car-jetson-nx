@@ -5,6 +5,8 @@ Compatible with ROS2 Foxy on Jetson Xavier NX
 
 This version uses subprocess calls to 'ros2 bag record' instead of rosbag2_py
 to avoid import issues on some systems.
+
+Modified to listen to recording_trigger from joystick controller.
 """
 
 import os
@@ -52,6 +54,7 @@ class BagRecorder(Node):
         self.process_monitor_thread = None
         self.failed_attempts = 0
         self.last_failure_time = 0
+        self.recording_trigger_active = False  # NEW: Track trigger state
         
         # Topic monitoring
         self.topic_last_received = {}
@@ -73,6 +76,7 @@ class BagRecorder(Node):
         
         self.get_logger().info("🎬 Bag Recorder initialized (subprocess mode)")
         self.get_logger().info(f"📁 Storage path: {self.config['storage']['base_path']}")
+        self.get_logger().info("🎮 Recording trigger mode: Waiting for joystick X button")
         
     def start_process_monitor(self):
         """Start a thread to monitor the recording process output."""
@@ -112,14 +116,14 @@ class BagRecorder(Node):
             },
             'quality': {
                 'min_recording_duration': 10.0,
-                'inactive_timeout': 5.0,
+                'inactive_timeout': 30.0,  # Increased timeout when using manual trigger
                 'min_linear_velocity': 0.1,
                 'min_angular_velocity': 0.05
             },
             'session': {
                 'use_timestamp_naming': True,
                 'session_prefix': 'behavior_',
-                'auto_start_on_joystick': True,
+                'auto_start_on_joystick': False,  # Disabled - now using trigger
                 'auto_stop_on_inactive': True
             }
         }
@@ -129,7 +133,8 @@ class BagRecorder(Node):
             '/camera/image_raw',
             '/cmd_vel_manual', 
             '/joy',
-            '/cmd_vel'
+            '/cmd_vel',
+            '/recording_trigger'  # NEW: Include the trigger topic
         ]
         
         # Create base directory if it doesn't exist
@@ -158,6 +163,11 @@ class BagRecorder(Node):
         # Image subscriber for quality monitoring
         self.img_sub = self.create_subscription(
             Image, '/camera/image_raw', self.image_callback, qos
+        )
+        
+        # NEW: Recording trigger subscriber
+        self.recording_trigger_sub = self.create_subscription(
+            Bool, '/recording_trigger', self.recording_trigger_callback, 10
         )
         
         self.get_logger().info("👂 Topic subscribers setup complete")
@@ -195,23 +205,29 @@ class BagRecorder(Node):
         # Stats monitoring timer
         self.stats_timer = self.create_timer(5.0, self.update_stats)
     
+    def recording_trigger_callback(self, msg: Bool):
+        """NEW: Handle recording trigger from joystick controller."""
+        self.recording_trigger_active = msg.data
+        
+        if msg.data and not self.is_recording:
+            # Start recording
+            self.get_logger().info("🎮 Recording trigger activated - starting recording")
+            success = self.start_recording()
+            if not success:
+                self.get_logger().error("❌ Failed to start recording on trigger")
+        elif not msg.data and self.is_recording:
+            # Stop recording
+            self.get_logger().info("🎮 Recording trigger deactivated - stopping recording")
+            success = self.stop_recording()
+            if not success:
+                self.get_logger().error("❌ Failed to stop recording on trigger")
+    
     def joy_callback(self, msg: Joy):
         """Handle joystick messages for activity detection."""
         self.last_activity_time = time.time()
         
-        # Check for significant joystick input
-        if any(abs(axis) > 0.1 for axis in msg.axes) or any(msg.buttons):
-            if (self.config['session']['auto_start_on_joystick'] and 
-                not self.is_recording):
-                
-                # Prevent rapid restart attempts after failures
-                current_time = time.time()
-                if (self.failed_attempts > 0 and 
-                    current_time - self.last_failure_time < 10.0):
-                    return  # Wait 10 seconds after failure before trying again
-                
-                self.get_logger().info("🎮 Joystick activity detected - auto-starting recording")
-                self.start_recording()
+        # NOTE: Auto-start functionality disabled when using trigger mode
+        # The recording is now controlled exclusively by the recording_trigger topic
     
     def cmd_callback(self, msg: Twist):
         """Handle command messages for activity detection."""
@@ -241,7 +257,10 @@ class BagRecorder(Node):
         current_time = time.time()
         inactive_duration = current_time - self.last_activity_time
         
+        # Only auto-stop on inactivity if the recording trigger is still active
+        # This prevents stopping due to inactivity when the user wants to keep recording
         if (self.config['session']['auto_stop_on_inactive'] and
+            self.recording_trigger_active and  # NEW: Check trigger is still active
             inactive_duration > self.config['quality']['inactive_timeout']):
             
             self.get_logger().info(
@@ -271,12 +290,14 @@ class BagRecorder(Node):
     def log_stats(self):
         """Log current recording statistics."""
         stats = self.recording_stats
+        trigger_status = "🟢 ACTIVE" if self.recording_trigger_active else "🔴 INACTIVE"
         self.get_logger().info(
             f"📊 Recording stats: "
             f"{stats['session_duration']:.1f}s, "
             f"{stats['total_images']} images, "
             f"{stats['total_commands']} commands, "
-            f"{stats['average_fps']:.1f} fps"
+            f"{stats['average_fps']:.1f} fps, "
+            f"Trigger: {trigger_status}"
         )
     
     def start_recording_callback(self, request, response):
@@ -301,6 +322,8 @@ class BagRecorder(Node):
         """Handle status service call."""
         response.success = True
         
+        trigger_status = "ACTIVE" if self.recording_trigger_active else "INACTIVE"
+        
         if self.is_recording:
             stats = self.recording_stats
             response.message = (
@@ -308,10 +331,11 @@ class BagRecorder(Node):
                 f"Duration: {stats['session_duration']:.1f}s\n"
                 f"Images: {stats['total_images']}\n"
                 f"Commands: {stats['total_commands']}\n"
-                f"FPS: {stats['average_fps']:.1f}"
+                f"FPS: {stats['average_fps']:.1f}\n"
+                f"Trigger: {trigger_status}"
             )
         else:
-            response.message = "Not recording"
+            response.message = f"Not recording (Trigger: {trigger_status})"
             
         return response
     
@@ -654,7 +678,8 @@ class BagRecorder(Node):
                     'session_name': self.current_session,
                     'start_time': datetime.now().isoformat(),
                     'start_timestamp': self.session_start_time,
-                    'topics': self.topics_to_record
+                    'topics': self.topics_to_record,
+                    'recording_trigger_mode': True  # NEW: Indicate trigger mode
                 },
                 'system_info': {
                     'ros_distro': os.environ.get('ROS_DISTRO', 'unknown'),
@@ -722,6 +747,7 @@ class BagRecorder(Node):
         self.get_logger().info(f"  Images: {stats['total_images']}")
         self.get_logger().info(f"  Commands: {stats['total_commands']}")
         self.get_logger().info(f"  Average FPS: {stats['average_fps']:.1f}")
+        self.get_logger().info(f"  Recording trigger mode: {'ON' if self.recording_trigger_active else 'OFF'}")
     
     def destroy_node(self):
         """Clean shutdown of the node."""

@@ -19,6 +19,7 @@ class JoystickController(Node):
         # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel_manual', 10)
         self.autonomous_mode_publisher = self.create_publisher(Bool, 'autonomous_mode', 10)
+        self.recording_trigger_publisher = self.create_publisher(Bool, 'recording_trigger', 10)
         
         # Parameters
         self.declare_parameter('max_linear_speed', 1.0)
@@ -33,6 +34,7 @@ class JoystickController(Node):
         self.button_mapping = {
             'autonomous_toggle': 0,  # A button (Xbox) / X button (PS4)
             'emergency_stop': 1,     # B button (Xbox) / Circle button (PS4)
+            'recording_toggle': 2,   # X button (Xbox) / Square button (PS4) - NEW
             'slow_mode': 4,          # LB button (Xbox) / L1 button (PS4)
             'turbo_mode': 5          # RB button (Xbox) / R1 button (PS4)
         }
@@ -48,10 +50,17 @@ class JoystickController(Node):
         self.emergency_stop = False
         self.slow_mode = False
         self.turbo_mode = False
+        self.recording_active = False  # NEW: Recording state
         self.last_button_state = {}
         
         self.get_logger().info('Joystick Controller Node Started')
         self.get_logger().info(f'Max speeds - Linear: {self.max_linear_speed}, Angular: {self.max_angular_speed}')
+        self.get_logger().info('Controls:')
+        self.get_logger().info('  A/X button: Toggle autonomous mode')
+        self.get_logger().info('  B/Circle button: Emergency stop')
+        self.get_logger().info('  X/Square button: Toggle recording')  # NEW
+        self.get_logger().info('  LB/L1 button: Slow mode (hold)')
+        self.get_logger().info('  RB/R1 button: Turbo mode (hold)')
     
     def joy_callback(self, msg):
         # Handle button presses
@@ -88,9 +97,29 @@ class JoystickController(Node):
                 self.emergency_stop = not self.emergency_stop
                 if self.emergency_stop:
                     self.stop_robot()
+                    # Stop recording if emergency stop is activated
+                    if self.recording_active:
+                        self.recording_active = False
+                        recording_msg = Bool()
+                        recording_msg.data = False
+                        self.recording_trigger_publisher.publish(recording_msg)
+                        self.get_logger().warn('Recording stopped due to emergency stop')
                     self.get_logger().warn('EMERGENCY STOP ACTIVATED')
                 else:
                     self.get_logger().info('Emergency stop deactivated')
+        
+        # NEW: Recording toggle (X/Square button)
+        if len(buttons) > self.button_mapping['recording_toggle']:
+            button_idx = self.button_mapping['recording_toggle']
+            if (buttons[button_idx] == 1 and 
+                self.last_button_state.get(button_idx, 0) == 0):
+                self.recording_active = not self.recording_active
+                recording_msg = Bool()
+                recording_msg.data = self.recording_active
+                self.recording_trigger_publisher.publish(recording_msg)
+                
+                status_str = "STARTED" if self.recording_active else "STOPPED"
+                self.get_logger().info(f'🎬 Recording {status_str}')
         
         # Speed modifiers (hold buttons)
         if len(buttons) > self.button_mapping['slow_mode']:
