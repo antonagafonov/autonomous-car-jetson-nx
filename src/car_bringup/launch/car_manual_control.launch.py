@@ -7,11 +7,11 @@ import launch.conditions
 def generate_launch_description():
     # Launch arguments for configuration
     return LaunchDescription([
-        # ================== NEW RECORDER ARGUMENT ==================
+        # ================== RECORDER ARGUMENT (NOW DEFAULT TRUE) ==================
         DeclareLaunchArgument(
             'enable_recorder',
-            default_value='false',
-            description='Enable the smart data recorder (set to true to enable)'
+            default_value='true',  # CHANGED: Now enabled by default
+            description='Enable the smart data recorder (set to false to disable)'
         ),
         
         # Motor control arguments
@@ -39,8 +39,8 @@ def generate_launch_description():
         # Camera arguments
         DeclareLaunchArgument(
             'enable_camera',
-            default_value='false',
-            description='Enable camera node (set to true to enable camera)'
+            default_value='true',  # CHANGED: Now enabled by default
+            description='Enable camera node (set to false to disable camera)'
         ),
         DeclareLaunchArgument(
             'camera_width',
@@ -83,18 +83,25 @@ def generate_launch_description():
             description='Enable image viewer node'
         ),
         
-        # ================== NEW RECORDER NODE ==================
-        # This node will start if enable_recorder is set to true.
-        # It handles recording automatically based on its config.
-        Node(
-            package='data_collect',
-            executable='bag_collect',
-            name='bag_collect',
-            output='screen',
-            condition=launch.conditions.IfCondition(LaunchConfiguration('enable_recorder'))
+        # ================== RECORDER NODE (START EARLY) ==================
+        # Start the recorder early with a small delay to ensure it's ready
+        # NOTE: No respawn to allow HOME button shutdown
+        TimerAction(
+            period=1.0,  # Start after 1 second
+            actions=[
+                Node(
+                    package='data_collect',
+                    executable='bag_collect',
+                    name='bag_collect',
+                    output='screen',
+                    condition=launch.conditions.IfCondition(LaunchConfiguration('enable_recorder')),
+                    # REMOVED: respawn=True, respawn_delay=2.0
+                )
+            ]
         ),
 
         # Node 1: Motor Controller (start first)
+        # NOTE: No respawn to allow HOME button shutdown
         Node(
             package='car_drivers',
             executable='motor_controller',
@@ -106,11 +113,11 @@ def generate_launch_description():
                 'max_speed': LaunchConfiguration('max_linear_speed'),
                 'pin_mode': 'BOARD'
             }],
-            respawn=True,
-            respawn_delay=2.0
+            # REMOVED: respawn=True, respawn_delay=2.0
         ),
         
         # Node 2: Camera Node (start with motor controller)
+        # NOTE: No respawn to allow HOME button shutdown
         Node(
             package='car_perception',
             executable='camera_node',
@@ -125,12 +132,12 @@ def generate_launch_description():
                 'flip_method': LaunchConfiguration('flip_method'),
                 'camera_id': LaunchConfiguration('camera_id'),
             }],
-            respawn=True,
-            respawn_delay=2.0,
+            # REMOVED: respawn=True, respawn_delay=2.0
             condition=launch.conditions.IfCondition(LaunchConfiguration('enable_camera')),
         ),
         
         # Node 3: Joy Node (start after small delay)
+        # NOTE: No respawn to allow HOME button shutdown
         TimerAction(
             period=2.0,
             actions=[
@@ -144,13 +151,13 @@ def generate_launch_description():
                         'deadzone': 0.1,
                         'autorepeat_rate': 20.0
                     }],
-                    respawn=True,
-                    respawn_delay=2.0
+                    # REMOVED: respawn=True, respawn_delay=2.0
                 )
             ]
         ),
         
         # Node 4: Joystick Controller (start after joy node)
+        # NOTE: No respawn for joystick controller so HOME button can shutdown system
         TimerAction(
             period=4.0,
             actions=[
@@ -165,13 +172,14 @@ def generate_launch_description():
                         'min_linear_speed': LaunchConfiguration('min_linear_speed'),
                         'deadzone': 0.1
                     }],
-                    respawn=True,
-                    respawn_delay=2.0
+                    # REMOVED: respawn=True, respawn_delay=2.0
+                    # This allows HOME button to shut down the system
                 )
             ]
         ),
         
         # Node 5: Command Relay (start after joystick controller)
+        # NOTE: No respawn to allow HOME button shutdown
         TimerAction(
             period=6.0,
             actions=[
@@ -180,13 +188,13 @@ def generate_launch_description():
                     executable='cmd_relay',
                     name='cmd_relay',
                     output='screen',
-                    respawn=True,
-                    respawn_delay=2.0
+                    # REMOVED: respawn=True, respawn_delay=2.0
                 )
             ]
         ),
         
         # Node 6: Image Viewer (optional, start after camera is stable)
+        # NOTE: No respawn to allow HOME button shutdown
         TimerAction(
             period=8.0,
             actions=[
@@ -195,8 +203,7 @@ def generate_launch_description():
                     executable='image_viewer',
                     name='image_viewer',
                     output='screen',
-                    respawn=True,
-                    respawn_delay=2.0,
+                    # REMOVED: respawn=True, respawn_delay=2.0
                     condition=launch.conditions.IfCondition(LaunchConfiguration('enable_image_viewer')),
                 )
             ]

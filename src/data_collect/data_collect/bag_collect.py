@@ -55,6 +55,8 @@ class BagRecorder(Node):
         self.failed_attempts = 0
         self.last_failure_time = 0
         self.recording_trigger_active = False  # NEW: Track trigger state
+        self.shutdown_initiated = False  # NEW: Prevent multiple shutdowns
+        self.metadata_save_timer = None  # NEW: Track metadata save timer
         
         # Topic monitoring
         self.topic_last_received = {}
@@ -86,7 +88,7 @@ class BagRecorder(Node):
                 
             try:
                 # Monitor stderr for errors
-                while self.recording_process.poll() is None:
+                while self.recording_process and self.recording_process.poll() is None:
                     if self.recording_process.stderr:
                         line = self.recording_process.stderr.readline()
                         if line:
@@ -94,14 +96,18 @@ class BagRecorder(Node):
                     time.sleep(0.1)
                     
                 # Check final exit status
-                exit_code = self.recording_process.returncode
-                if exit_code != 0:
-                    stdout, stderr = self.recording_process.communicate()
-                    self.get_logger().error(f"❌ Recording process exited with code {exit_code}")
-                    self.get_logger().error(f"STDERR: {stderr}")
+                if self.recording_process:
+                    exit_code = self.recording_process.returncode
+                    if exit_code != 0:
+                        stdout, stderr = self.recording_process.communicate()
+                        self.get_logger().error(f"❌ Recording process exited with code {exit_code}")
+                        if stderr:
+                            self.get_logger().error(f"STDERR: {stderr}")
                     
             except Exception as e:
-                self.get_logger().error(f"❌ Error monitoring process: {e}")
+                # Only log if we're still recording (avoid shutdown errors)
+                if self.is_recording and not self.shutdown_initiated:
+                    self.get_logger().error(f"❌ Error monitoring process: {e}")
         
         self.process_monitor_thread = threading.Thread(target=monitor_process, daemon=True)
         self.process_monitor_thread.start()
@@ -443,7 +449,7 @@ class BagRecorder(Node):
             }
             
             # Save session metadata after a short delay to let ros2 bag create the directory
-            self.create_timer(3.0, self.save_session_metadata_delayed)
+            self.metadata_save_timer = self.create_timer(3.0, self.save_session_metadata_delayed)
             
             self.get_logger().info(f"🎬 Recording started: {session_name}")
             self.get_logger().info(f"📁 Path: {self.session_path}")
@@ -504,6 +510,8 @@ class BagRecorder(Node):
             session_name = self.current_session
             self.current_session = None
             self.session_start_time = None
+            
+            # Clean up process reference
             self.recording_process = None
             
             self.get_logger().info(f"🏁 Recording stopped: {session_name}")
@@ -535,6 +543,11 @@ class BagRecorder(Node):
     def save_session_metadata_delayed(self):
         """Save session metadata after ros2 bag has created the directory."""
         try:
+            # Prevent multiple calls
+            if self.metadata_save_timer is not None:
+                self.metadata_save_timer.cancel()
+                self.metadata_save_timer = None
+                
             # Check if directory was created by ros2 bag
             if os.path.exists(self.session_path):
                 # First create the ROS2 metadata.yaml if it doesn't exist
@@ -544,8 +557,8 @@ class BagRecorder(Node):
                 self.save_session_metadata()
                 self.get_logger().info(f"💾 Metadata saved: {self.session_path}/metadata.json")
             else:
-                # Try again in a few seconds
-                self.create_timer(2.0, self.save_session_metadata_delayed)
+                # Try again in a few seconds, but only once more
+                self.metadata_save_timer = self.create_timer(2.0, self.save_session_metadata_delayed)
         except Exception as e:
             self.get_logger().error(f"❌ Failed to save delayed metadata: {e}")
     
@@ -751,9 +764,25 @@ class BagRecorder(Node):
     
     def destroy_node(self):
         """Clean shutdown of the node."""
+        if self.shutdown_initiated:
+            return
+        self.shutdown_initiated = True
+        
+        self.get_logger().info("🏠 Bag collector shutting down gracefully...")
+        
+        # Cancel any pending metadata save timer
+        if self.metadata_save_timer is not None:
+            self.metadata_save_timer.cancel()
+            self.metadata_save_timer = None
+        
         if self.is_recording:
             self.get_logger().info("🛑 Stopping recording due to shutdown...")
             self.stop_recording()
+            # Give a moment for the recording to stop properly
+            import time
+            time.sleep(1.0)
+        
+        self.get_logger().info("✅ Bag collector shutdown complete")
         super().destroy_node()
 
 
@@ -766,9 +795,19 @@ def main(args=None):
         
         # Handle shutdown gracefully
         def signal_handler(signum, frame):
-            node.get_logger().info("🛑 Shutdown signal received")
+            if node.shutdown_initiated:
+                return
+            node.get_logger().info("🏠 Shutdown signal received - cleaning up...")
+            if node.is_recording:
+                node.get_logger().info("🛑 Stopping active recording...")
+                node.stop_recording()
+                # Give time for recording to stop
+                import time
+                time.sleep(1.0)
+            node.get_logger().info("✅ Cleanup complete")
             node.destroy_node()
             rclpy.shutdown()
+            exit(0)
         
         import signal
         signal.signal(signal.SIGINT, signal_handler)

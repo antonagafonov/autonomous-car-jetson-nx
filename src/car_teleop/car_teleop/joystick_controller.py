@@ -36,7 +36,8 @@ class JoystickController(Node):
             'emergency_stop': 1,     # B button (Xbox) / Circle button (PS4)
             'recording_toggle': 2,   # X button (Xbox) / Square button (PS4) - NEW
             'slow_mode': 4,          # LB button (Xbox) / L1 button (PS4)
-            'turbo_mode': 5          # RB button (Xbox) / R1 button (PS4)
+            'turbo_mode': 5,         # RB button (Xbox) / R1 button (PS4)
+            'graceful_exit': 10      # Home/PS button - CORRECTED to button 10
         }
         
         # Axis mapping
@@ -61,6 +62,7 @@ class JoystickController(Node):
         self.get_logger().info('  X/Square button: Toggle recording')  # NEW
         self.get_logger().info('  LB/L1 button: Slow mode (hold)')
         self.get_logger().info('  RB/R1 button: Turbo mode (hold)')
+        self.get_logger().info('  HOME/PS button: Graceful shutdown')  # NEW
     
     def joy_callback(self, msg):
         # Handle button presses
@@ -120,6 +122,174 @@ class JoystickController(Node):
                 
                 status_str = "STARTED" if self.recording_active else "STOPPED"
                 self.get_logger().info(f'🎬 Recording {status_str}')
+        
+        # NEW: Graceful exit (HOME/PS button)
+        if len(buttons) > self.button_mapping['graceful_exit']:
+            button_idx = self.button_mapping['graceful_exit']
+            current_button_state = buttons[button_idx]
+            previous_button_state = self.last_button_state.get(button_idx, 0)
+            
+            # Debug: Print button state changes
+            if current_button_state != previous_button_state:
+                print(f"[DEBUG] HOME button: {previous_button_state} -> {current_button_state}")
+            
+            if (current_button_state == 1 and previous_button_state == 0):
+                print("[DEBUG] HOME button PRESSED - Starting shutdown sequence")
+                self.get_logger().info('🏠 HOME button pressed - initiating graceful shutdown...')
+                
+                # Stop robot movement
+                self.stop_robot()
+                
+                # Stop recording if active
+                if self.recording_active:
+                    self.recording_active = False
+                    recording_msg = Bool()
+                    recording_msg.data = False
+                    self.recording_trigger_publisher.publish(recording_msg)
+                    self.get_logger().info('🎬 Recording stopped for shutdown')
+                
+                # Give a moment for recording to stop
+                import time
+                time.sleep(1.0)
+                
+                # Initiate shutdown sequence using system-wide cleanup
+                self.get_logger().info('🛑 Initiating system shutdown...')
+                
+                import signal
+                import os
+                import subprocess
+                
+                try:
+                    # Direct cleanup - don't use external script to avoid timing issues
+                    self.get_logger().info('🛑 Direct system cleanup...')
+                    print("[joystick_controller] 🛑 Direct system cleanup...")
+                    
+                    import time
+                    
+                    # Kill nodes in order (except joystick controller - save for last)
+                    cleanup_patterns = [
+                        ('motor_controller', 'Motor Controller'),
+                        ('camera_node', 'Camera Node'),
+                        ('bag_collect', 'Bag Collector'), 
+                        ('cmd_relay', 'Command Relay'),
+                        ('joy_node', 'Joy Node'),
+                        ('car_drivers', 'Car Drivers'),
+                        ('car_perception', 'Car Perception'),
+                        ('car_teleop', 'Car Teleop'),
+                        ('data_collect', 'Data Collect')
+                    ]
+                    
+                    # Kill nodes in order (except joystick controller - save for last)
+                    cleanup_patterns = [
+                        ('motor_controller', 'Motor Controller'),
+                        ('camera_node', 'Camera Node'),
+                        ('bag_collect', 'Bag Collector'), 
+                        ('cmd_relay', 'Command Relay'),
+                        ('joy_node', 'Joy Node'),
+                        ('car_drivers', 'Car Drivers'),
+                        ('car_perception', 'Car Perception'),
+                        ('car_teleop', 'Car Teleop'),
+                        ('data_collect', 'Data Collect')
+                    ]
+                    
+                    for pattern, name in cleanup_patterns:
+                        try:
+                            print(f"[joystick_controller] 🛑 Sending SIGTERM to {name}...")
+                            subprocess.run(['pkill', '-f', pattern], capture_output=True)
+                            print(f"[joystick_controller] ⏳ Waiting for {name} to shutdown gracefully...")
+                            time.sleep(3.0)  # Give 3 seconds for graceful shutdown
+                            
+                            # Check if still running
+                            result = subprocess.run(['pgrep', '-f', pattern], capture_output=True)
+                            if result.returncode == 0:
+                                print(f"[joystick_controller] ⚡ Force killing remaining {name} processes...")
+                                subprocess.run(['pkill', '-9', '-f', pattern], capture_output=True)
+                                time.sleep(1.0)  # Brief wait after force kill
+                            
+                            print(f"[joystick_controller] ✅ {name} cleanup complete")
+                        except Exception as e:
+                            print(f"[joystick_controller] ⚠️  Error killing {name}: {e}")
+                    
+                    # Additional wait before GPIO cleanup
+                    print("[joystick_controller] ⏳ Final wait for all nodes to terminate...")
+                    time.sleep(2.0)
+                    
+                    # Clean up GPIO
+                    print("[joystick_controller] 🔧 Cleaning GPIO resources...")
+                    try:
+                        subprocess.run(['bash', '-c', 'echo "15" | sudo tee /sys/class/gpio/unexport'], 
+                                     capture_output=True, text=True)
+                        subprocess.run(['bash', '-c', 'echo "32" | sudo tee /sys/class/gpio/unexport'], 
+                                     capture_output=True, text=True)
+                        print("[joystick_controller] ✅ GPIO cleanup complete")
+                    except Exception as e:
+                        print(f"[joystick_controller] ⚠️  GPIO cleanup error: {e}")
+                    
+                    print("[joystick_controller] ✅ All cleanup operations complete!")
+                    
+                    # Wait before killing launch process
+                    print("[joystick_controller] ⏳ Final wait before terminating launch...")
+                    time.sleep(2.0)
+                    
+                    # Kill launch process
+                    parent_pid = os.getppid()
+                    print(f"[joystick_controller] 🛑 Terminating launch process (PID: {parent_pid})...")
+                    
+                    try:
+                        os.kill(parent_pid, signal.SIGTERM)
+                        time.sleep(2.0)  # Give launch time to cleanup
+                        # Only force kill if still running
+                        try:
+                            os.kill(parent_pid, 0)  # Test if process exists
+                            print(f"[joystick_controller] ⚡ Force killing launch process...")
+                            os.kill(parent_pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            print(f"[joystick_controller] ✅ Launch process terminated gracefully")
+                    except Exception as e:
+                        print(f"[joystick_controller] ⚠️  Launch termination error: {e}")
+                    
+                    # Finally kill any remaining joystick controller processes (including self)
+                    print("[joystick_controller] 🛑 Final cleanup: killing all remaining car processes...")
+                    try:
+                        # Nuclear option - kill everything car-related
+                        final_patterns = ['joy_node', 'joystick_controller', 'cmd_relay', 
+                                        'motor_controller', 'camera_node', 'bag_collect']
+                        
+                        for pattern in final_patterns:
+                            subprocess.run(['pkill', '-f', pattern], capture_output=True)
+                            time.sleep(0.5)
+                            subprocess.run(['pkill', '-9', '-f', pattern], capture_output=True)
+                            print(f"[joystick_controller] 💀 Nuclear kill: {pattern}")
+                        
+                        print("[joystick_controller] 🧹 Final system-wide cleanup...")
+                        # Also kill by package patterns
+                        subprocess.run(['pkill', '-f', 'car_drivers'], capture_output=True)
+                        subprocess.run(['pkill', '-f', 'car_perception'], capture_output=True)  
+                        subprocess.run(['pkill', '-f', 'car_teleop'], capture_output=True)
+                        subprocess.run(['pkill', '-f', 'data_collect'], capture_output=True)
+                        
+                    except Exception as e:
+                        print(f"[joystick_controller] ⚠️  Final cleanup error: {e}")
+                    
+                    # Finally exit this process
+                    print("[joystick_controller] 🏁 Shutdown sequence complete - exiting...")
+                    time.sleep(1.0)
+                    self.destroy_node()
+                    
+                    # Force exit
+                    import sys
+                    import os
+                    print(f"[joystick_controller] 💀 Force exiting PID {os.getpid()}...")
+                    os._exit(0)  # More aggressive exit
+                        
+                except Exception as e:
+                    # Fallback: exit this node cleanly
+                    fallback_msg = f'🛑 Fallback: Exiting joystick controller... (Error: {e})'
+                    self.get_logger().info(fallback_msg)
+                    print(f"[joystick_controller] {fallback_msg}")
+                    self.destroy_node()
+                    import sys
+                    sys.exit(0)
         
         # Speed modifiers (hold buttons)
         if len(buttons) > self.button_mapping['slow_mode']:
