@@ -625,8 +625,10 @@ sudo jetson_clocks
 
 ### Cleanup
 
-```bash echo 'alias car_cleanup="pkill -9 -f joystick_controller; pkill -9 -f joy_node; pkill -9 -f motor_controller; pkill -9 -f camera_node; pkill -9 -f bag_collect; pkill -9 -f cmd_relay; echo '✅ All car processes cleaned up'"' >> ~/.bashrc
+```bash 
+echo 'alias car_cleanup="pkill -9 -f joystick_controller; pkill -9 -f joy_node; pkill -9 -f motor_controller; pkill -9 -f camera_node; pkill -9 -f bag_collect; pkill -9 -f cmd_relay; echo '✅ All car processes cleaned up'"' >> ~/.bashrc
 ```
+
 ```bash
 car_cleanup
 ```
