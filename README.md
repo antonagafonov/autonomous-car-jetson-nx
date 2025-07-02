@@ -148,6 +148,16 @@ echo "source ~/car_ws/install/setup.bash" >> ~/.bashrc
 
 ### Quick Start - One Command Launch
 
+**Take Image from terminal:**
+```bash
+gst-launch-1.0 nvarguscamerasrc sensor-id=0 num-buffers=1 \
+! 'video/x-raw(memory:NVMM),width=1920,height=1080,format=NV12' \
+! nvvidconv \
+! 'video/x-raw, format=I420' \
+! jpegenc \
+! filesink location=capture.jpg
+```
+
 **Launch complete system (recommended - camera and recording enabled by default):**
 ```bash
 source ~/car_ws/install/setup.bash
