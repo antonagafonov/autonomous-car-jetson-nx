@@ -110,7 +110,7 @@ def extract_complete_data(bag_path):
     print(f"📁 Input bag: {bag_path}")
     
     # Find the .db3 file
-    db_files = list(bag_path.glob('*.db3*'))
+    db_files = list(bag_path.glob('*.db3'))
     if not db_files:
         print("❌ No .db3 files found")
         return False

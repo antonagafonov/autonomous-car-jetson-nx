@@ -8,6 +8,7 @@ import json
 import cv2
 import numpy as np
 import os
+import argparse
 from pathlib import Path
 
 def load_dataset(json_path):
@@ -17,7 +18,7 @@ def load_dataset(json_path):
     return data
 
 def create_video_with_commands(images_dir, json_path, output_video_path, 
-                              start_seq=100, end_seq=500, fps=30):
+                              start_seq=200, end_seq=1000, fps=30):
     """
     Create video from images with command information overlay.
     
@@ -65,8 +66,8 @@ def create_video_with_commands(images_dir, json_path, output_video_path,
         if img is None:
             print(f"Warning: Could not read image {image_filename}, skipping...")
             continue
-        img = cv2.flip(img, 0)
-        img = cv2.flip(img, 1)
+        # img = cv2.flip(img, 0)
+        # img = cv2.flip(img, 1)
         # Initialize video writer with first valid image dimensions
         if video_writer is None:
             height, width = img.shape[:2]
@@ -135,24 +136,32 @@ def create_video_with_commands(images_dir, json_path, output_video_path,
     print(f"Total frames processed: {len(filtered_data)}")
 
 def main():
-    # Configuration
-    images_dir = "/home/toon/car_datasets/behavior_20250702_081106_extracted/images"
-    json_path = "/home/toon/car_datasets/behavior_20250702_081106_extracted/data/synchronized_dataset.json"
-    output_video_path = "/home/toon/car_datasets/behavior_20250702_081106_extracted/car_behavior_video_100_500.mp4"
+    parser = argparse.ArgumentParser(description='Generate video from car dataset images with command overlays')
+    parser.add_argument('dataset_path', help='Path to the extracted dataset directory')
+    parser.add_argument('--start-seq', type=int, default=200, help='Starting sequence number (default: 200)')
+    parser.add_argument('--end-seq', type=int, default=5000, help='Ending sequence number (default: 1000)')
+    parser.add_argument('--fps', type=int, default=30, help='Frames per second (default: 30)')
+    parser.add_argument('--output', help='Output video file path (default: auto-generated)')
     
-    # Sequence range
-    start_seq = 100
-    end_seq = 500
+    args = parser.parse_args()
     
-    # Video settings
-    fps = 30  # Frames per second
+    # Build paths based on dataset directory
+    dataset_path = Path(args.dataset_path)
+    images_dir = dataset_path / "images"
+    json_path = dataset_path / "data" / "synchronized_dataset.json"
+    
+    # Generate output path if not specified
+    if args.output:
+        output_video_path = args.output
+    else:
+        output_video_path = dataset_path / f"car_behavior_video_{args.start_seq}_{args.end_seq}.mp4"
     
     # Validate paths
-    if not os.path.exists(images_dir):
+    if not images_dir.exists():
         print(f"Error: Images directory not found: {images_dir}")
         return
     
-    if not os.path.exists(json_path):
+    if not json_path.exists():
         print(f"Error: JSON file not found: {json_path}")
         return
     
@@ -162,21 +171,22 @@ def main():
         os.makedirs(output_dir)
     
     print("Starting video generation...")
+    print(f"Dataset directory: {dataset_path}")
     print(f"Images directory: {images_dir}")
     print(f"JSON file: {json_path}")
     print(f"Output video: {output_video_path}")
-    print(f"Sequence range: {start_seq} to {end_seq}")
-    print(f"FPS: {fps}")
+    print(f"Sequence range: {args.start_seq} to {args.end_seq}")
+    print(f"FPS: {args.fps}")
     print("-" * 50)
     
     # Generate video
     create_video_with_commands(
-        images_dir=images_dir,
-        json_path=json_path,
-        output_video_path=output_video_path,
-        start_seq=start_seq,
-        end_seq=end_seq,
-        fps=fps
+        images_dir=str(images_dir),
+        json_path=str(json_path),
+        output_video_path=str(output_video_path),
+        start_seq=args.start_seq,
+        end_seq=args.end_seq,
+        fps=args.fps
     )
 
 if __name__ == "__main__":

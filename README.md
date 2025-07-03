@@ -5,7 +5,7 @@
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
-A comprehensive autonomous car project built with ROS2 Foxy on NVIDIA Jetson Xavier NX. Features real-time joystick control, differential drive motor control, CSI camera integration, **intelligent joystick-triggered data recording**, **graceful HOME button shutdown**, and expandable architecture for autonomous navigation capabilities.
+A comprehensive autonomous car project built with ROS2 Foxy on NVIDIA Jetson Xavier NX. Features real-time joystick control, differential drive motor control, CSI camera integration, **web-based camera streaming**, **intelligent joystick-triggered data recording**, **graceful HOME button shutdown**, and expandable architecture for autonomous navigation capabilities.
 
 ![Autonomous Car](images/4.jpeg)
 *The completed autonomous car with Jetson Xavier NX, 4-motor differential drive, CSI camera, and Bluetooth joystick control*
@@ -17,6 +17,7 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 - **ROS2 Foxy** for robust robotics software architecture
 - **Differential drive control** for precise movement
 - **CSI Camera integration** with hardware-accelerated pipeline
+- **Web-based camera streaming** for remote monitoring from any device
 - **Intelligent joystick control** with one-button recording and graceful shutdown
 - **Smart data collection system** with automatic session management and compression
 - **Production-ready workflow** with complete system shutdown via HOME button
@@ -26,13 +27,14 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 
 - ✅ **Manual Control**: Bluetooth joystick teleoperation with Xbox/PS4 controller support
 - ✅ **Motor Control**: Precise PWM-based differential drive control with 4-motor setup
-- ✅ **Camera Integration**: CSI camera with GStreamer hardware acceleration and 180° flip
-- ✅ **Real-time Vision**: Live camera feed publishing to ROS2 topics at 30fps
+- ✅ **Camera Integration**: CSI camera with GStreamer hardware acceleration and configurable flip
+- ✅ **Real-time Vision**: Live camera feed publishing to ROS2 topics at up to 60fps
+- ✅ **🌐 Web Camera Streaming**: Remote camera access from any device on the network
 - ✅ **Intelligent Data Collection**: One-button recording with Square button, automatic session management
 - ✅ **Graceful System Shutdown**: HOME button provides complete, clean system termination
 - ✅ **Automatic Compression**: ZSTD compression for efficient storage of training data
 - ✅ **Quality Monitoring**: Real-time FPS tracking, message counting, and session statistics
-- ✅ **One-Command Launch**: Complete system startup with camera and recorder enabled by default
+- ✅ **One-Command Launch**: Complete system startup with camera, recorder, and web stream enabled by default
 - ✅ **Production Workflow**: Battle-tested recording and shutdown system for serious data collection
 - ✅ **Safety Systems**: Emergency stop, speed limiting, mode switching, and resource cleanup
 - ✅ **Real-time Performance**: Low-latency control loop for responsive driving
@@ -158,7 +160,7 @@ gst-launch-1.0 nvarguscamerasrc sensor-id=0 num-buffers=1 \
 ! filesink location=capture.jpg
 ```
 
-**Launch complete system (recommended - camera and recording enabled by default):**
+**Launch complete system (recommended - camera, recording, and web streaming enabled by default):**
 ```bash
 source ~/car_ws/install/setup.bash
 ros2 launch car_bringup car_manual_control.launch.py
@@ -172,13 +174,107 @@ ros2 launch car_bringup car_manual_control.launch.py enable_camera:=false
 # Disable recorder if not needed
 ros2 launch car_bringup car_manual_control.launch.py enable_recorder:=false
 
+# Disable web streaming if not needed
+ros2 launch car_bringup car_manual_control.launch.py enable_web_streamer:=false
+
 # Conservative settings for testing
 ros2 launch car_bringup car_manual_control.launch.py \
   max_linear_speed:=0.5 base_speed_scale:=40
 
-# High performance with custom camera resolution
+# High performance with custom camera resolution and web streaming
 ros2 launch car_bringup car_manual_control.launch.py \
-  camera_width:=1920 camera_height:=1080 output_width:=960 output_height:=540
+  framerate:=60 \
+  camera_width:=1920 camera_height:=1080 \
+  output_width:=960 output_height:=540 \
+  web_quality:=85 web_port:=8080
+
+# Custom web streaming settings
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_port:=9090 \
+  web_quality:=70 \
+  web_max_width:=1280 \
+  web_max_height:=720
+```
+
+### 🌐 Web Camera Streaming
+
+The system includes a built-in web streaming server for remote camera monitoring from any device on your network.
+
+#### **Access Camera Stream**
+
+Once launched, access the camera stream from any device:
+
+- **📱 From your phone/tablet**: `http://[robot_ip]:8080`
+- **💻 From your computer**: `http://[robot_ip]:8080`
+- **🏠 From the robot itself**: `http://localhost:8080`
+
+The robot's IP address is displayed in the launch logs:
+```
+🌐 Web Image Streamer Started!
+📱 Access from network: http://192.168.1.100:8080
+🏠 Access locally: http://localhost:8080
+⚙️ Quality: 80%, Max size: 1280x720
+```
+
+#### **Web Interface Features**
+
+The web interface provides:
+- **📹 Live Video Stream**: Real-time MJPEG stream at up to 60fps
+- **📊 Status Monitoring**: Online/offline status with auto-reconnection
+- **🔄 Refresh Controls**: Manual stream refresh for troubleshooting
+- **📱 Mobile Responsive**: Works perfectly on phones, tablets, and computers
+- **🎯 Auto-Reconnection**: Automatically handles network interruptions
+- **⚡ Performance Stats**: Display resolution, FPS, and connection info
+
+#### **Web Streaming Configuration**
+
+```bash
+# Default settings (enabled by default)
+ros2 launch car_bringup car_manual_control.launch.py
+
+# Custom port and quality
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_port:=9090 \
+  web_quality:=90
+
+# Lower quality for slower networks
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_quality:=60 \
+  web_max_width:=640 \
+  web_max_height:=480
+
+# High quality for fast networks
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_quality:=95 \
+  web_max_width:=1920 \
+  web_max_height:=1080
+```
+
+#### **Web Streaming Parameters**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `enable_web_streamer` | `true` | Enable/disable web streaming |
+| `web_port` | `8080` | HTTP port for web interface |
+| `web_quality` | `80` | JPEG quality (0-100, higher = better quality) |
+| `web_max_width` | `1280` | Maximum stream width |
+| `web_max_height` | `720` | Maximum stream height |
+
+#### **Troubleshooting Web Stream**
+
+```bash
+# Check if web streamer is running
+ros2 node list | grep web_image_streamer
+
+# Monitor web streaming status
+ros2 topic echo /camera/image_raw
+
+# Test network access (from another device)
+ping [robot_ip]
+curl http://[robot_ip]:8080
+
+# Check firewall (if needed)
+sudo ufw allow 8080
 ```
 
 ### 🎮 Joystick Controls
@@ -207,9 +303,10 @@ The project includes a production-ready data collection system with intelligent 
 
 **Instant recording while driving:**
 ```bash
-# Launch system (camera and recorder enabled by default)
+# Launch system (camera, web stream, and recorder enabled by default)
 ros2 launch car_bringup car_manual_control.launch.py
 
+# Access web stream from your phone: http://[robot_ip]:8080
 # Press Square button to start recording
 # Drive the car to collect training data  
 # Press Square button again to stop recording
@@ -219,6 +316,7 @@ ros2 launch car_bringup car_manual_control.launch.py
 #### Intelligent Recording Features
 
 - ✅ **One-Button Operation**: Square button starts/stops recording instantly
+- ✅ **Web Monitoring**: Watch camera feed from any device while recording
 - ✅ **Automatic Session Management**: Timestamped sessions with unique names
 - ✅ **Real-Time Quality Monitoring**: Live FPS tracking and message counting
 - ✅ **Automatic Compression**: ZSTD compression for storage efficiency
@@ -236,8 +334,8 @@ ros2 launch car_bringup car_manual_control.launch.py
 # System performs:
 # 1. Stops active recording gracefully
 # 2. Saves all session metadata  
-# 3. Terminates all nodes cleanly
-# 4. Releases hardware resources (GPIO, camera)
+# 3. Terminates all nodes cleanly (including web streamer)
+# 4. Releases hardware resources (GPIO, camera, HTTP server)
 # 5. Complete system shutdown
 
 # Optional cleanup if needed:
@@ -343,8 +441,11 @@ During recording, the system provides live feedback:
 
 **Monitor camera feed:**
 ```bash
-# View live camera stream
+# View live camera stream (ROS2 native)
 ros2 run rqt_image_view rqt_image_view
+
+# View web stream (any device)
+# Open browser: http://[robot_ip]:8080
 
 # Check camera status
 ros2 topic hz /camera/image_raw
@@ -382,25 +483,31 @@ source ~/car_ws/install/setup.bash
 ros2 run car_perception camera_node
 ```
 
-**Terminal 3: Joystick Input**
+**Terminal 3: Web Image Streamer**
+```bash
+source ~/car_ws/install/setup.bash
+ros2 run car_web_streamer web_image_streamer
+```
+
+**Terminal 4: Joystick Input**
 ```bash
 source ~/car_ws/install/setup.bash
 ros2 run joy joy_node
 ```
 
-**Terminal 4: Joystick Controller**
+**Terminal 5: Joystick Controller**
 ```bash
 source ~/car_ws/install/setup.bash
 ros2 run car_teleop joystick_controller
 ```
 
-**Terminal 5: Command Relay**
+**Terminal 6: Command Relay**
 ```bash
 source ~/car_ws/install/setup.bash
 ros2 run car_teleop cmd_relay
 ```
 
-**Terminal 6: Smart Recorder**
+**Terminal 7: Smart Recorder**
 ```bash
 source ~/car_ws/install/setup.bash
 ros2 run data_collect bag_collect
@@ -433,7 +540,7 @@ ros2 topic pub /recording_trigger std_msgs/Bool "data: false" --once
 | `/cmd_vel_manual` | `geometry_msgs/Twist` | Manual control commands |
 | `/cmd_vel` | `geometry_msgs/Twist` | Final motor commands |
 | `/autonomous_mode` | `std_msgs/Bool` | Current operation mode |
-| `/camera/image_raw` | `sensor_msgs/Image` | Live camera feed (640x480 @ 30fps) |
+| `/camera/image_raw` | `sensor_msgs/Image` | Live camera feed (up to 60fps) |
 | `/recording_trigger` | `std_msgs/Bool` | **Recording state control** |
 
 ### Nodes
@@ -442,6 +549,7 @@ ros2 topic pub /recording_trigger std_msgs/Bool "data: false" --once
 |------|---------|----------|
 | `motor_controller` | `car_drivers` | GPIO motor control |
 | `camera_node` | `car_perception` | CSI camera interface with GStreamer |
+| `web_image_streamer` | `car_web_streamer` | **HTTP-based camera streaming for network access** |
 | `joystick_controller` | `car_teleop` | Joystick input processing with recording control |
 | `cmd_relay` | `car_teleop` | Command routing |
 | `bag_collect` | `data_collect` | **Smart recording with joystick trigger** |
@@ -460,6 +568,7 @@ ros2 topic pub /recording_trigger std_msgs/Bool "data: false" --once
 | Tool | Function |
 |------|----------|
 | **Joystick Recording** | Press Square button to record training data |
+| **Web Camera Monitoring** | Real-time camera feed accessible from any device |
 | `bag_collect.py` | Extract and organize bag data for ML |
 | `ros2 bag record` | Manual recording of ROS2 topics |
 | **Smart Recorder** | Automatic session management and quality monitoring |
@@ -493,11 +602,25 @@ ros2 param set /camera_node camera_height 720
 ros2 param set /camera_node output_width 640
 ros2 param set /camera_node output_height 480
 
-# Set frame rate
-ros2 param set /camera_node framerate 30
+# Set frame rate (up to 60fps)
+ros2 param set /camera_node framerate 60
 
-# Set flip method (0=none, 1=90CW, 2=180, 3=90CCW)
+# Set flip method (0=none, 1=90CW, 2=180°, 3=90CCW, 4=H-flip, 5=V-flip, 6=both)
 ros2 param set /camera_node flip_method 2
+```
+
+### Web Streaming Parameters
+
+```bash
+# Set web streaming port
+ros2 param set /web_image_streamer port 8080
+
+# Set JPEG quality (0-100)
+ros2 param set /web_image_streamer quality 80
+
+# Set maximum stream resolution
+ros2 param set /web_image_streamer max_width 1280
+ros2 param set /web_image_streamer max_height 720
 ```
 
 ### Recording System Parameters
@@ -523,6 +646,7 @@ ros2 param set /bag_collect auto_stop_on_inactive true
 # Start system
 ros2 launch car_bringup car_manual_control.launch.py
 
+# Monitor camera from your phone: http://[robot_ip]:8080
 # Drive manually and press Square to record interesting driving segments
 # Each recording session automatically saved with timestamp
 ```
@@ -558,6 +682,7 @@ images = pd.read_csv('~/ml_training_data/data/images.csv')
 ```bash
 # Your trained model can publish to /cmd_vel when autonomous_mode is True
 # The system will automatically switch between manual and autonomous control
+# Monitor performance via web stream: http://[robot_ip]:8080
 ```
 
 ## 🔧 Troubleshooting
@@ -572,6 +697,23 @@ nvvidconv ! 'video/x-raw, format=RGBA' ! glimagesink
 # Check camera permissions
 ls -la /dev/video*
 sudo usermod -a -G video $USER
+```
+
+### Web Streaming Issues
+```bash
+# Check if web streamer node is running
+ros2 node list | grep web_image_streamer
+
+# Test web server accessibility
+curl http://localhost:8080
+curl http://[robot_ip]:8080
+
+# Check firewall settings
+sudo ufw status
+sudo ufw allow 8080
+
+# Monitor web streaming logs
+ros2 topic echo /rosout | grep web_image_streamer
 ```
 
 ### Recording Issues
@@ -618,9 +760,10 @@ sudo /opt/nvidia/jetson-io/jetson-io.py
 ```bash
 # Launch with performance settings
 ros2 launch car_bringup car_manual_control.launch.py \
+  framerate:=60 \
   camera_width:=1920 camera_height:=1080 \
-  output_width:=640 output_height:=480 \
-  framerate:=30 \
+  output_width:=1280 output_height:=720 \
+  web_quality:=85 \
   max_linear_speed:=1.0
 
 # Enable Jetson performance mode
@@ -631,7 +774,7 @@ sudo jetson_clocks
 ### Cleanup
 
 ```bash 
-echo 'alias car_cleanup="pkill -9 -f joystick_controller; pkill -9 -f joy_node; pkill -9 -f motor_controller; pkill -9 -f camera_node; pkill -9 -f bag_collect; pkill -9 -f cmd_relay; echo '✅ All car processes cleaned up'"' >> ~/.bashrc
+echo 'alias car_cleanup="pkill -9 -f joystick_controller; pkill -9 -f joy_node; pkill -9 -f motor_controller; pkill -9 -f camera_node; pkill -9 -f bag_collect; pkill -9 -f cmd_relay; pkill -9 -f web_image_streamer; echo '✅ All car processes cleaned up'"' >> ~/.bashrc
 ```
 
 ```bash
@@ -650,13 +793,30 @@ find ~/car_datasets -name "behavior_*" -mtime +30 -exec rm -rf {} \;
 du -sh ~/car_datasets/*
 ```
 
+### Network Optimization
+```bash
+# For slower networks, reduce web stream quality
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_quality:=60 web_max_width:=640 web_max_height:=480
+
+# For faster networks, increase quality
+ros2 launch car_bringup car_manual_control.launch.py \
+  web_quality:=95 web_max_width:=1920 web_max_height:=1080
+
+# Check network performance
+ping [robot_ip]
+iperf3 -c [robot_ip]  # If iperf3 is installed
+```
+
 ## 🚧 Future Roadmap
 
 - [ ] **Lane Detection**: OpenCV-based lane following
 - [ ] **DEEP Lane Detection**: RESNET18-based lane following
 - [ ] **Object Detection**: YOLO-based obstacle detection
 - [ ] **SLAM Integration**: Mapping and localization
-- [ ] **Web Interface**: Remote monitoring and control
+- [ ] **Enhanced Web Interface**: Control panel with recording controls
+- [ ] **Multi-Camera Support**: Support for multiple camera feeds
+- [ ] **WebRTC Streaming**: Lower latency streaming option
 - [ ] **Docker Support**: Containerized deployment
 - [ ] **CI/CD Pipeline**: Automated testing and deployment
 
@@ -675,5 +835,3 @@ For questions, issues, or suggestions, please open an issue on GitHub or contact
 ---
 
 **Happy autonomous driving! 🚗💨**
-
-

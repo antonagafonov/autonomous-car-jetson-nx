@@ -64,13 +64,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'framerate',
-            default_value='30',
+            default_value='60',
             description='Camera framerate in fps'
         ),
         DeclareLaunchArgument(
             'flip_method',
             default_value='2',
-            description='Camera flip method (0=none, 1=90CW, 2=180, 3=90CCW)'
+            description='Camera flip method (0=none, 1=90CW, 2=180°, 3=90CCW, 4=H-flip, 5=V-flip, 6=both)'
         ),
         DeclareLaunchArgument(
             'camera_id',
@@ -81,6 +81,33 @@ def generate_launch_description():
             'enable_image_viewer',
             default_value='false',
             description='Enable image viewer node'
+        ),
+        
+        # ================== WEB STREAMER ARGUMENTS ==================
+        DeclareLaunchArgument(
+            'enable_web_streamer',
+            default_value='true',  # NEW: Enabled by default
+            description='Enable web image streamer for network viewing'
+        ),
+        DeclareLaunchArgument(
+            'web_port',
+            default_value='8080',
+            description='Port for web image streamer'
+        ),
+        DeclareLaunchArgument(
+            'web_quality',
+            default_value='80',
+            description='JPEG quality for web stream (0-100)'
+        ),
+        DeclareLaunchArgument(
+            'web_max_width',
+            default_value='1280',
+            description='Maximum width for web stream'
+        ),
+        DeclareLaunchArgument(
+            'web_max_height',
+            default_value='720',
+            description='Maximum height for web stream'
         ),
         
         # ================== RECORDER NODE (START EARLY) ==================
@@ -193,10 +220,32 @@ def generate_launch_description():
             ]
         ),
         
+        # ================== WEB STREAMER NODE (START AFTER CAMERA) ==================
+        # Start web streamer after camera is stable
+        TimerAction(
+            period=8.0,
+            actions=[
+                Node(
+                    package='car_web_streamer',  # NEW PACKAGE
+                    executable='web_image_streamer',
+                    name='web_image_streamer',
+                    output='screen',
+                    parameters=[{
+                        'port': LaunchConfiguration('web_port'),
+                        'quality': LaunchConfiguration('web_quality'),
+                        'max_width': LaunchConfiguration('web_max_width'),
+                        'max_height': LaunchConfiguration('web_max_height'),
+                    }],
+                    condition=launch.conditions.IfCondition(LaunchConfiguration('enable_web_streamer')),
+                    # NOTE: No respawn to allow HOME button shutdown
+                )
+            ]
+        ),
+        
         # Node 6: Image Viewer (optional, start after camera is stable)
         # NOTE: No respawn to allow HOME button shutdown
         TimerAction(
-            period=8.0,
+            period=10.0,  # Moved to after web streamer
             actions=[
                 Node(
                     package='car_perception',

@@ -183,9 +183,23 @@ class CameraNode(Node):
                     frame = cv2.resize(frame, (self.output_width, self.output_height))
                 
                 # Apply manual flip if using regular camera (not CSI)
-                if self.cap.get(cv2.CAP_PROP_BACKEND) != cv2.CAP_GSTREAMER:
-                    if self.flip_method == 2:  # 180 degree flip
-                        frame = cv2.rotate(frame, cv2.ROTATE_180)
+                # if self.cap.get(cv2.CAP_PROP_BACKEND) != cv2.CAP_GSTREAMER:
+                    # if self.flip_method == 2:  # 180 degree flip
+                    #     frame = cv2.rotate(frame, cv2.ROTATE_180)
+                # Apply flip method manually (works for all camera types)
+                if self.flip_method == 1:  # 90 degrees clockwise
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                elif self.flip_method == 2:  # 180 degrees
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+                elif self.flip_method == 3:  # 90 degrees counter-clockwise
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                elif self.flip_method == 4:  # Horizontal flip
+                    frame = cv2.flip(frame, 1)
+                elif self.flip_method == 5:  # Vertical flip
+                    frame = cv2.flip(frame, 0)
+                elif self.flip_method == 6:  # Both flips
+                    frame = cv2.flip(frame, -1)
+                # flip_method == 0 means no flip
                 
                 # Convert OpenCV image to ROS Image message
                 msg = self.bridge.cv2_to_imgmsg(frame, 'bgr8')
