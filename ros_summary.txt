@@ -1,0 +1,37 @@
+🚗 ROS DEPENDENCIES QUICK SUMMARY
+Generated: 2025-07-08 22:15:41
+
+📦 Package Counts:
+   ROS2 packages available: 180
+   System ROS packages: 180
+   Workspace packages: 8
+   Python packages: 286
+
+🏗️  Workspace Packages:
+car_bringup	src/car_bringup	(ros.ament_python)
+car_description	src/car_description	(ros.ament_python)
+car_drivers	src/car_drivers	(ros.ament_python)
+car_inference	src/car_inference	(ros.ament_python)
+car_perception	src/car_perception	(ros.ament_python)
+car_teleop	src/car_teleop	(ros.ament_python)
+car_web_streamer	src/car_web_streamer	(ros.ament_python)
+data_collect	src/data_collect	(ros.ament_python)
+
+🔧 Key Dependencies:
+colcon-ros                           0.5.0
+launch-ros                           0.11.7
+launch-testing-ros                   0.11.7
+numpy                                1.24.4
+ros2action                           0.9.13
+ros2bag                              0.3.11
+ros2cli                              0.9.13
+ros2component                        0.9.13
+ros2doctor                           0.9.13
+ros2interface                        0.9.13
+
+🌐 Environment:
+   ROS_DISTRO: foxy
+   ROS_DOMAIN_ID: 
+   Workspace: /home/toon/car_ws
+
+📄 Full report: ros_dependencies_report.txt

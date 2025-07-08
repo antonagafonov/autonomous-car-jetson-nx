@@ -1,0 +1,768 @@
+🚗 ROS2 DEPENDENCIES REPORT
+Generated: 2025-07-08 22:15:41
+Workspace: /home/toon/car_ws
+ROS Distro: foxy
+Platform: Linux ubuntu 5.10.192-tegra #1 SMP PREEMPT Thu Jun 13 20:07:24 PDT 2024 aarch64 aarch64 aarch64 GNU/Linux
+
+===============================================
+
+=== ROS2 PACKAGES AVAILABLE ===
+Total packages: 180
+
+action_msgs
+actionlib_msgs
+ament_cmake
+ament_cmake_auto
+ament_cmake_copyright
+ament_cmake_core
+ament_cmake_cppcheck
+ament_cmake_cpplint
+ament_cmake_export_definitions
+ament_cmake_export_dependencies
+ament_cmake_export_include_directories
+ament_cmake_export_interfaces
+ament_cmake_export_libraries
+ament_cmake_export_link_flags
+ament_cmake_export_targets
+ament_cmake_flake8
+ament_cmake_gmock
+ament_cmake_gtest
+ament_cmake_include_directories
+ament_cmake_libraries
+ament_cmake_lint_cmake
+ament_cmake_pep257
+ament_cmake_pytest
+ament_cmake_python
+ament_cmake_ros
+ament_cmake_target_dependencies
+ament_cmake_test
+ament_cmake_uncrustify
+ament_cmake_version
+ament_cmake_xmllint
+ament_copyright
+ament_cppcheck
+ament_cpplint
+ament_flake8
+ament_index_cpp
+ament_index_python
+ament_lint
+ament_lint_auto
+ament_lint_cmake
+ament_lint_common
+ament_package
+ament_pep257
+ament_uncrustify
+ament_xmllint
+builtin_interfaces
+car_bringup
+car_description
+car_drivers
+car_inference
+car_perception
+car_teleop
+car_web_streamer
+class_loader
+common_interfaces
+composition_interfaces
+console_bridge_vendor
+cv_bridge
+data_collect
+diagnostic_msgs
+domain_coordinator
+eigen3_cmake_module
+fastrtps_cmake_module
+geometry2
+geometry_msgs
+joy
+kdl_parser
+launch
+launch_ros
+launch_testing
+launch_testing_ament_cmake
+launch_testing_ros
+launch_xml
+launch_yaml
+libstatistics_collector
+libyaml_vendor
+lifecycle_msgs
+message_filters
+nav_msgs
+osrf_pycommon
+pluginlib
+python_cmake_module
+rcl
+rcl_action
+rcl_interfaces
+rcl_lifecycle
+rcl_logging_spdlog
+rcl_yaml_param_parser
+rclcpp
+rclcpp_action
+rclcpp_components
+rclcpp_lifecycle
+rclpy
+rcpputils
+rcutils
+rmw
+rmw_dds_common
+rmw_fastrtps_cpp
+rmw_fastrtps_shared_cpp
+rmw_implementation
+rmw_implementation_cmake
+robot_state_publisher
+ros2action
+ros2bag
+ros2cli
+ros2component
+ros2doctor
+ros2interface
+ros2launch
+ros2lifecycle
+ros2multicast
+ros2node
+ros2param
+ros2pkg
+ros2run
+ros2service
+ros2topic
+ros_base
+ros_core
+ros_environment
+ros_workspace
+rosbag2
+rosbag2_compression
+rosbag2_converter_default_plugins
+rosbag2_cpp
+rosbag2_storage
+rosbag2_storage_default_plugins
+rosbag2_transport
+rosgraph_msgs
+rosidl_adapter
+rosidl_cmake
+rosidl_default_generators
+rosidl_default_runtime
+rosidl_generator_c
+rosidl_generator_cpp
+rosidl_generator_py
+rosidl_parser
+rosidl_runtime_c
+rosidl_runtime_cpp
+rosidl_runtime_py
+rosidl_typesupport_c
+rosidl_typesupport_cpp
+rosidl_typesupport_fastrtps_c
+rosidl_typesupport_fastrtps_cpp
+rosidl_typesupport_interface
+rosidl_typesupport_introspection_c
+rosidl_typesupport_introspection_cpp
+rpyutils
+sdl2_vendor
+sensor_msgs
+shape_msgs
+shared_queues_vendor
+spdlog_vendor
+sqlite3_vendor
+sros2
+sros2_cmake
+statistics_msgs
+std_msgs
+std_srvs
+stereo_msgs
+teleop_twist_joy
+tf2
+tf2_bullet
+tf2_eigen
+tf2_geometry_msgs
+tf2_kdl
+tf2_msgs
+tf2_py
+tf2_ros
+tf2_sensor_msgs
+tf2_tools
+tinyxml2_vendor
+tinyxml_vendor
+tracetools
+trajectory_msgs
+uncrustify_vendor
+unique_identifier_msgs
+urdf
+visualization_msgs
+yaml_cpp_vendor
+zstd_vendor
+
+=== WORKSPACE PACKAGES ===
+car_bringup	src/car_bringup	(ros.ament_python)
+car_description	src/car_description	(ros.ament_python)
+car_drivers	src/car_drivers	(ros.ament_python)
+car_inference	src/car_inference	(ros.ament_python)
+car_perception	src/car_perception	(ros.ament_python)
+car_teleop	src/car_teleop	(ros.ament_python)
+car_web_streamer	src/car_web_streamer	(ros.ament_python)
+data_collect	src/data_collect	(ros.ament_python)
+
+=== SYSTEM ROS-FOXY PACKAGES ===
+Total ROS packages: 180
+
+ii  ros-foxy-action-msgs                            1.0.0-1focal.20230527.061324         arm64        Messages and service definitions common among all ROS actions.
+ii  ros-foxy-actionlib-msgs                         2.0.5-1focal.20230527.061326         arm64        A package containing some message definitions used in the implementation of ROS 1 actions.
+ii  ros-foxy-ament-cmake                            0.9.12-1focal.20230527.034003        arm64        The entry point package for the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-auto                       0.9.12-1focal.20230527.034115        arm64        The auto-magic functions for ease to use of the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-copyright                  0.9.8-1focal.20230527.040734         arm64        The CMake API for ament_copyright to check every source file contains copyright reference.
+ii  ros-foxy-ament-cmake-core                       0.9.12-1focal.20230527.032629        arm64        The core of the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-cppcheck                   0.9.8-1focal.20230527.041005         arm64        The CMake API for ament_cppcheck to perform static code analysis on C/C++ code using Cppcheck.
+ii  ros-foxy-ament-cmake-cpplint                    0.9.8-1focal.20230527.044538         arm64        The CMake API for ament_cpplint to lint C / C++ code using cpplint.
+ii  ros-foxy-ament-cmake-export-definitions         0.9.12-1focal.20230527.033821        arm64        The ability to export definitions to downstream packages in the ament buildsystem.
+ii  ros-foxy-ament-cmake-export-dependencies        0.9.12-1focal.20230527.033904        arm64        The ability to export dependencies to downstream packages in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-export-include-directories 0.9.12-1focal.20230527.033816        arm64        The ability to export include directories to downstream packages in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-export-interfaces          0.9.12-1focal.20230527.033600        arm64        The ability to export interfaces to downstream packages in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-export-libraries           0.9.12-1focal.20230527.033536        arm64        The ability to export libraries to downstream packages in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-export-link-flags          0.9.12-1focal.20230527.033819        arm64        The ability to export link flags to downstream packages in the ament buildsystem.
+ii  ros-foxy-ament-cmake-export-targets             0.9.12-1focal.20230527.033602        arm64        The ability to export targets to downstream packages in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-flake8                     0.9.8-1focal.20230527.041059         arm64        The CMake API for ament_flake8 to check code syntax and style conventions with flake8.
+ii  ros-foxy-ament-cmake-gmock                      0.9.12-1focal.20230527.040917        arm64        The ability to add Google mock-based tests in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-gtest                      0.9.12-1focal.20230527.040644        arm64        The ability to add gtest-based tests in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-include-directories        0.9.12-1focal.20230527.033849        arm64        The functionality to order include directories according to a chain of prefixes in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-libraries                  0.9.12-1focal.20230527.033841        arm64        The functionality to deduplicate libraries in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-lint-cmake                 0.9.8-1focal.20230527.040626         arm64        The CMake API for ament_lint_cmake to lint CMake code using cmakelint.
+ii  ros-foxy-ament-cmake-pep257                     0.9.8-1focal.20230527.041105         arm64        The CMake API for ament_pep257 to check code against the style conventions in PEP 257.
+ii  ros-foxy-ament-cmake-pytest                     0.9.12-1focal.20230527.043854        arm64        The ability to run Python tests using pytest in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-python                     0.9.12-1focal.20230527.033817        arm64        The ability to use Python in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-ros                        0.9.2-1focal.20230527.045739         arm64        The ROS specific CMake bits in the ament buildsystem.
+ii  ros-foxy-ament-cmake-target-dependencies        0.9.12-1focal.20230527.033914        arm64        The ability to add definitions, include directories and libraries of a package to a target in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-test                       0.9.12-1focal.20230527.033843        arm64        The ability to add tests in the ament buildsystem in CMake.
+ii  ros-foxy-ament-cmake-uncrustify                 0.9.8-1focal.20230527.040848         arm64        The CMake API for ament_uncrustify to check code against styleconventions using uncrustify.
+ii  ros-foxy-ament-cmake-version                    0.9.12-1focal.20230527.033844        arm64        The ability to override the exported package version in the ament buildsystem.
+ii  ros-foxy-ament-cmake-xmllint                    0.9.8-1focal.20230527.041123         arm64        The CMake API for ament_xmllint to check XML file using xmmlint.
+ii  ros-foxy-ament-copyright                        0.9.8-1focal.20230527.040308         arm64        The ability to check source files for copyright and license information.
+ii  ros-foxy-ament-cppcheck                         0.9.8-1focal.20230527.033907         arm64        The ability to perform static code analysis on C/C++ code using Cppcheck and generate xUnit test result files.
+ii  ros-foxy-ament-cpplint                          0.9.8-1focal.20230527.044409         arm64        The ability to check code against the Google style conventions using cpplint and generate xUnit test result files.
+ii  ros-foxy-ament-flake8                           0.9.8-1focal.20230527.034018         arm64        The ability to check code for style and syntax conventions with flake8.
+ii  ros-foxy-ament-index-cpp                        1.1.0-1focal.20230527.044824         arm64        C++ API to access the ament resource index.
+ii  ros-foxy-ament-index-python                     1.1.0-1focal.20230527.040511         arm64        Python API to access the ament resource index.
+ii  ros-foxy-ament-lint                             0.9.8-1focal.20230527.033909         arm64        Providing common API for ament linter packages.
+ii  ros-foxy-ament-lint-auto                        0.9.8-1focal.20230527.034012         arm64        The auto-magic functions for ease to use of the ament linters in CMake.
+ii  ros-foxy-ament-lint-cmake                       0.9.8-1focal.20230527.040514         arm64        The ability to lint CMake code using cmakelint and generate xUnit test result files.
+ii  ros-foxy-ament-lint-common                      0.9.8-1focal.20230527.044618         arm64        The list of commonly used linters in the ament buildsytem in CMake.
+ii  ros-foxy-ament-package                          0.9.5-1focal.20210422.231141         arm64        The parser for the manifest files in the ament buildsystem.
+ii  ros-foxy-ament-pep257                           0.9.8-1focal.20230527.040159         arm64        The ability to check code against the style conventions in PEP 8 and generate xUnit test result files.
+ii  ros-foxy-ament-uncrustify                       0.9.8-1focal.20230527.034242         arm64        The ability to check code against style conventions using uncrustify and generate xUnit test result files.
+ii  ros-foxy-ament-xmllint                          0.9.8-1focal.20230527.040536         arm64        The ability to check XML files like the package manifest using xmllint and generate xUnit test result files.
+ii  ros-foxy-builtin-interfaces                     1.0.0-1focal.20230527.052241         arm64        A package containing message and service definitions for types defined in the OMG IDL Platform Specific Model.
+ii  ros-foxy-class-loader                           2.0.3-1focal.20230527.051208         arm64        The class_loader package is a ROS-independent package for loading plugins during runtime and the foundation of the higher level ROS &quot;pluginlib&quot; library.
+ii  ros-foxy-common-interfaces                      2.0.5-1focal.20230527.062341         arm64        common_interfaces contains messages and services that are widely used by other ROS packages.
+ii  ros-foxy-composition-interfaces                 1.0.0-1focal.20230527.052959         arm64        A package containing message and service definitions for managing composable nodes in a container process.
+ii  ros-foxy-console-bridge-vendor                  1.2.4-1focal.20230527.045200         arm64        Wrapper around console_bridge, providing nothing but a dependency on console_bridge, on some systems.
+ii  ros-foxy-cv-bridge                              3.0.7-1focal.20230527.055710         arm64        This contains CvBridge, which converts between ROS2 Image messages and OpenCV images.
+ii  ros-foxy-diagnostic-msgs                        2.0.5-1focal.20230527.054733         arm64        A package containing some diagnostics related message and service definitions.
+ii  ros-foxy-domain-coordinator                     0.9.2-1focal.20230527.040545         arm64        A tool to coordinate unique ROS_DOMAIN_IDs across multiple processes
+ii  ros-foxy-eigen3-cmake-module                    0.1.1-1focal.20230527.041126         arm64        Exports a custom CMake module to find Eigen3.
+ii  ros-foxy-fastcdr                                1.0.13-1focal.20230527.033526        arm64        CDR serialization implementation.
+ii  ros-foxy-fastrtps                               2.1.4-1focal.20230527.042032         arm64        Implementation of RTPS standard.
+ii  ros-foxy-fastrtps-cmake-module                  1.0.4-1focal.20230527.045201         arm64        Provide CMake module to find eProsima FastRTPS.
+ii  ros-foxy-foonathan-memory-vendor                1.2.0-1focal.20230527.041836         arm64        Foonathan/memory vendor package for Fast-RTPS.
+ii  ros-foxy-geometry-msgs                          2.0.5-1focal.20230527.054419         arm64        A package containing some geometry related message definitions.
+ii  ros-foxy-geometry2                              0.13.14-1focal.20230606.042034       arm64        A metapackage to bring in the default packages second generation Transform Library in ros, tf2.
+ii  ros-foxy-gmock-vendor                           1.8.9001-1focal.20230527.040816      arm64        The package provides GoogleMock.
+ii  ros-foxy-gtest-vendor                           1.8.9001-1focal.20230527.040619      arm64        The package provides GoogleTest.
+ii  ros-foxy-joy                                    3.0.1-1focal.20230527.084030         arm64        The joy package contains joy_node, a node that interfaces a generic joystick to ROS 2.
+ii  ros-foxy-kdl-parser                             2.4.1-2focal.20230527.050929         arm64        The Kinematics and Dynamics Library (KDL) defines a tree structure to represent the kinematic and dynamic parameters of a robot mechanism.
+ii  ros-foxy-launch                                 0.10.10-1focal.20230527.042114       arm64        The ROS launch tool.
+ii  ros-foxy-launch-ros                             0.11.7-1focal.20230527.070924        arm64        ROS specific extensions to the launch tool.
+ii  ros-foxy-launch-testing                         0.10.10-1focal.20230527.042328       arm64        A package to create tests which involve launch files and multiple processes.
+ii  ros-foxy-launch-testing-ament-cmake             0.10.10-1focal.20230527.045532       arm64        A package providing cmake functions for running launch tests from the build.
+ii  ros-foxy-launch-testing-ros                     0.11.7-1focal.20230527.071336        arm64        A package providing utilities for writing ROS2 enabled launch tests.
+ii  ros-foxy-launch-xml                             0.10.10-1focal.20230527.042403       arm64        XML frontend for the launch package.
+ii  ros-foxy-launch-yaml                            0.10.10-1focal.20230527.044551       arm64        YAML frontend for the launch package.
+ii  ros-foxy-libstatistics-collector                1.0.2-1focal.20230527.065734         arm64        Lightweight aggregation utilities to collect statistics and measure message metrics.
+ii  ros-foxy-libyaml-vendor                         1.0.4-1focal.20230527.051235         arm64        Wrapper around libyaml, provides the last version (1.8.0 rc) that ships with a CMake module
+ii  ros-foxy-lifecycle-msgs                         1.0.0-1focal.20230527.052241         arm64        A package containing some lifecycle related message and service definitions.
+ii  ros-foxy-message-filters                        3.2.7-1focal.20230606.034003         arm64        A set of ROS2 message filters which take in messages and may output those messages at a later time, based on the conditions that filter needs met.
+ii  ros-foxy-nav-msgs                               2.0.5-1focal.20230527.054845         arm64        A package containing some navigation related message and service definitions.
+ii  ros-foxy-orocos-kdl                             3.3.5-1focal.20230527.041439         arm64        This package contains a recent version of the Kinematics and Dynamics Library (KDL), distributed by the Orocos Project.
+ii  ros-foxy-osrf-pycommon                          0.1.11-1focal.20230527.042013        arm64        Commonly needed Python modules, used by Python software developed at OSRF.
+ii  ros-foxy-pluginlib                              2.5.4-1focal.20230527.051434         arm64        The pluginlib package provides tools for writing and dynamically loading plugins using the ROS build infrastructure.
+ii  ros-foxy-python-cmake-module                    0.8.1-1focal.20230527.045404         arm64        Provide CMake module with extra functionality for Python.
+ii  ros-foxy-rcl                                    1.1.14-1focal.20230527.064949        arm64        The ROS client library common implementation.
+ii  ros-foxy-rcl-action                             1.1.14-1focal.20230527.065734        arm64        Package containing a C-based ROS action implementation
+ii  ros-foxy-rcl-interfaces                         1.0.0-1focal.20230527.052551         arm64        The ROS client library common interfaces.
+ii  ros-foxy-rcl-lifecycle                          1.1.14-1focal.20230527.065734        arm64        Package containing a C-based lifecycle implementation
+ii  ros-foxy-rcl-logging-spdlog                     1.1.0-1focal.20230527.051207         arm64        Implementation of rcl_logging API for an spdlog backend.
+ii  ros-foxy-rcl-yaml-param-parser                  1.1.14-1focal.20230527.051509        arm64        Parse a YAML parameter file and populate the C data structure.
+ii  ros-foxy-rclcpp                                 2.4.3-1focal.20230527.072753         arm64        The ROS client library in C++.
+ii  ros-foxy-rclcpp-action                          2.4.3-1focal.20230527.081314         arm64        Adds action APIs for C++.
+ii  ros-foxy-rclcpp-components                      2.4.3-1focal.20230527.082118         arm64        Package containing tools for dynamically loadable components
+ii  ros-foxy-rclcpp-lifecycle                       2.4.3-1focal.20230527.082123         arm64        Package containing a prototype for lifecycle implementation
+ii  ros-foxy-rclpy                                  1.0.13-1focal.20230527.070432        arm64        Package containing the Python client.
+ii  ros-foxy-rcpputils                              1.3.2-1focal.20230527.050637         arm64        Package containing utility code for C++.
+ii  ros-foxy-rcutils                                1.1.5-1focal.20230527.050146         arm64        Package containing various utility types and functions for C
+ii  ros-foxy-rmw                                    1.0.4-1focal.20230527.050902         arm64        Contains the ROS middleware API.
+ii  ros-foxy-rmw-dds-common                         1.0.3-1focal.20230527.052241         arm64        Define a common interface between DDS implementations of ROS middleware.
+ii  ros-foxy-rmw-fastrtps-cpp                       1.3.2-1focal.20230527.064419         arm64        Implement the ROS middleware interface using eProsima FastRTPS static code generation in C++.
+ii  ros-foxy-rmw-fastrtps-shared-cpp                1.3.2-1focal.20230527.052644         arm64        Code shared on static and dynamic type support of rmw_fastrtps_cpp.
+ii  ros-foxy-rmw-implementation                     1.0.3-1focal.20230527.064741         arm64        The decision which ROS middleware implementation should be used for C++.
+ii  ros-foxy-rmw-implementation-cmake               1.0.4-1focal.20230527.045456         arm64        CMake functions which can discover and enumerate available implementations.
+ii  ros-foxy-robot-state-publisher                  2.4.5-1focal.20230606.035841         arm64        This package allows you to publish the state of a robot to tf2.
+ii  ros-foxy-ros-base                               0.9.2-1focal.20230606.043331         arm64        A package which extends 'ros_core' and includes other basic functionalities like tf2 and urdf.
+ii  ros-foxy-ros-core                               0.9.2-1focal.20230527.090016         arm64        A package to aggregate the packages required to use publish / subscribe, services, generate messages and other core ROS concepts.
+ii  ros-foxy-ros-environment                        2.5.1-1focal.20230527.033846         arm64        The package provides the environment variables `ROS_VERSION` and `ROS_DISTRO`.
+ii  ros-foxy-ros-workspace                          1.0.2-1focal.20230527.033103         arm64        Provides the prefix level environment files for ROS 2 packages.
+ii  ros-foxy-ros2action                             0.9.13-1focal.20230527.072126        arm64        The action command for ROS 2 command line tools.
+ii  ros-foxy-ros2bag                                0.3.11-1focal.20230531.181528        arm64        Entry point for rosbag in ROS 2
+ii  ros-foxy-ros2cli                                0.9.13-1focal.20230527.071202        arm64        Framework for ROS 2 command line tools.
+ii  ros-foxy-ros2component                          0.9.13-1focal.20230527.083435        arm64        The component command for ROS 2 command line tools.
+ii  ros-foxy-ros2doctor                             0.9.13-1focal.20230527.072131        arm64        A command line tool to check potential issues in a ROS 2 system
+ii  ros-foxy-ros2interface                          0.9.13-1focal.20230527.072135        arm64        The interface command for ROS 2 command line tools
+ii  ros-foxy-ros2launch                             0.11.7-1focal.20230527.072558        arm64        The launch command for ROS 2 command line tools.
+ii  ros-foxy-ros2lifecycle                          0.9.13-1focal.20230527.085611        arm64        The lifecycle command for ROS 2 command line tools.
+ii  ros-foxy-ros2multicast                          0.9.13-1focal.20230527.071620        arm64        The multicast command for ROS 2 command line tools.
+ii  ros-foxy-ros2node                               0.9.13-1focal.20230527.072141        arm64        The node command for ROS 2 command line tools.
+ii  ros-foxy-ros2param                              0.9.13-1focal.20230527.072601        arm64        The param command for ROS 2 command line tools.
+ii  ros-foxy-ros2pkg                                0.9.13-1focal.20230527.072142        arm64        The pkg command for ROS 2 command line tools.
+ii  ros-foxy-ros2run                                0.9.13-1focal.20230527.072601        arm64        The run command for ROS 2 command line tools.
+ii  ros-foxy-ros2service                            0.9.13-1focal.20230527.072144        arm64        The service command for ROS 2 command line tools.
+ii  ros-foxy-ros2topic                              0.9.13-1focal.20230527.072146        arm64        The topic command for ROS 2 command line tools.
+ii  ros-foxy-rosbag2                                0.3.11-1focal.20230531.182104        arm64        Meta package for rosbag2 related packages
+ii  ros-foxy-rosbag2-compression                    0.3.11-1focal.20230531.180149        arm64        Compression implementations for rosbag2 bags and messages.
+ii  ros-foxy-rosbag2-converter-default-plugins      0.3.11-1focal.20230531.180149        arm64        Package containing default plugins for format converters
+ii  ros-foxy-rosbag2-cpp                            0.3.11-1focal.20230531.175714        arm64        C++ ROSBag2 client library
+ii  ros-foxy-rosbag2-storage                        0.3.11-1focal.20230531.175541        arm64        ROS2 independent storage format to store serialized ROS2 messages
+ii  ros-foxy-rosbag2-storage-default-plugins        0.3.11-1focal.20230531.180022        arm64        ROSBag2 SQLite3 storage plugin
+ii  ros-foxy-rosbag2-transport                      0.3.11-1focal.20230531.180609        arm64        Layer encapsulating ROS middleware to allow rosbag2 to be used with or without middleware
+ii  ros-foxy-rosgraph-msgs                          1.0.0-1focal.20230527.053100         arm64        Messages relating to the ROS Computation Graph.
+ii  ros-foxy-rosidl-adapter                         1.3.1-1focal.20230527.044805         arm64        API and scripts to parse .msg/.srv/.action files and convert them to .idl.
+ii  ros-foxy-rosidl-cmake                           1.3.1-1focal.20230527.045122         arm64        The CMake functionality to invoke code generation for ROS interface files.
+ii  ros-foxy-rosidl-default-generators              1.0.1-1focal.20230527.052209         arm64        A configuration package defining the default ROS interface generators.
+ii  ros-foxy-rosidl-default-runtime                 1.0.1-1focal.20230527.052208         arm64        A configuration package defining the runtime for the ROS interfaces.
+ii  ros-foxy-rosidl-generator-c                     1.3.1-1focal.20230527.050858         arm64        Generate the ROS interfaces in C.
+ii  ros-foxy-rosidl-generator-cpp                   1.3.1-1focal.20230527.051037         arm64        Generate the ROS interfaces in C++.
+ii  ros-foxy-rosidl-generator-py                    0.9.7-1focal.20230527.051854         arm64        Generate the ROS interfaces in Python.
+ii  ros-foxy-rosidl-parser                          1.3.1-1focal.20230527.044949         arm64        The parser for ROS interface files.
+ii  ros-foxy-rosidl-runtime-c                       1.3.1-1focal.20230527.050613         arm64        Generate the ROS interfaces in C.
+ii  ros-foxy-rosidl-runtime-cpp                     1.3.1-1focal.20230527.045011         arm64        Generate the ROS interfaces in C++.
+ii  ros-foxy-rosidl-runtime-py                      0.9.1-1focal.20230527.064528         arm64        Runtime utilities for working with generated ROS interfaces in Python.
+ii  ros-foxy-rosidl-typesupport-c                   1.0.3-1focal.20230527.051637         arm64        Generate the type support for C messages.
+ii  ros-foxy-rosidl-typesupport-cpp                 1.0.3-1focal.20230527.051851         arm64        Generate the type support for C++ messages.
+ii  ros-foxy-rosidl-typesupport-fastrtps-c          1.0.4-1focal.20230527.051617         arm64        Generate the C interfaces for eProsima FastRTPS.
+ii  ros-foxy-rosidl-typesupport-fastrtps-cpp        1.0.4-1focal.20230527.051412         arm64        Generate the C++ interfaces for eProsima FastRTPS.
+ii  ros-foxy-rosidl-typesupport-interface           1.3.1-1focal.20230527.044811         arm64        The interface for rosidl typesupport packages.
+ii  ros-foxy-rosidl-typesupport-introspection-c     1.3.1-1focal.20230527.050900         arm64        Generate the message type support for dynamic message construction in C.
+ii  ros-foxy-rosidl-typesupport-introspection-cpp   1.3.1-1focal.20230527.051050         arm64        Generate the message type support for dynamic message construction in C++.
+ii  ros-foxy-rpyutils                               0.2.0-1focal.20230527.040658         arm64        Package containing various utility types and functions for Python
+ii  ros-foxy-sdl2-vendor                            3.0.1-1focal.20230527.035542         arm64        Vendor library for SDL2.
+ii  ros-foxy-sensor-msgs                            2.0.5-1focal.20230527.055054         arm64        A package containing some sensor data related message and service definitions.
+ii  ros-foxy-shape-msgs                             2.0.5-1focal.20230527.060649         arm64        A package containing some message definitions which describe geometric shapes.
+ii  ros-foxy-shared-queues-vendor                   0.3.11-1focal.20230531.174803        arm64        Vendor package for concurrent queues from moodycamel
+ii  ros-foxy-spdlog-vendor                          1.1.3-1focal.20230527.045643         arm64        Wrapper around spdlog, providing nothing but a dependency on spdlog, on some systems.
+ii  ros-foxy-sqlite3-vendor                         0.3.11-1focal.20230531.175046        arm64        SQLite 3 vendor package
+ii  ros-foxy-sros2                                  0.9.5-1focal.20230527.072148         arm64        Command line tools for managing SROS2 keys
+ii  ros-foxy-sros2-cmake                            0.9.5-1focal.20230527.072510         arm64        CMake macros to configure security
+ii  ros-foxy-statistics-msgs                        1.0.0-1focal.20230527.053108         arm64        Message definitions for reporting statistics for topics and system resources.
+ii  ros-foxy-std-msgs                               2.0.5-1focal.20230527.053140         arm64        A package containing some standard message definitions.
+ii  ros-foxy-std-srvs                               2.0.5-1focal.20230527.053223         arm64        A package containing some standard service definitions.
+ii  ros-foxy-stereo-msgs                            2.0.5-1focal.20230527.060244         arm64        A package containing some stereo camera related message definitions.
+ii  ros-foxy-teleop-twist-joy                       2.4.3-1focal.20230527.084346         arm64        Generic joystick teleop for twist robots.
+ii  ros-foxy-tf2                                    0.13.14-1focal.20230527.060805       arm64        tf2 is the second generation of the transform library, which lets the user keep track of multiple coordinate frames over time.
+ii  ros-foxy-tf2-bullet                             0.13.14-1focal.20230606.040358       arm64        tf2_bullet
+ii  ros-foxy-tf2-eigen                              0.13.14-1focal.20230606.040410       arm64        tf2_eigen
+ii  ros-foxy-tf2-geometry-msgs                      0.13.14-1focal.20230606.040417       arm64        tf2_geometry_msgs
+ii  ros-foxy-tf2-kdl                                0.13.14-1focal.20230606.040423       arm64        KDL binding for tf2
+ii  ros-foxy-tf2-msgs                               0.13.14-1focal.20230527.062217       arm64        tf2_msgs
+ii  ros-foxy-tf2-py                                 0.13.14-1focal.20230527.071941       arm64        The tf2_py package
+ii  ros-foxy-tf2-ros                                0.13.14-1focal.20230606.034740       arm64        This package contains the ROS bindings for the tf2 library, for both Python and C++.
+ii  ros-foxy-tf2-sensor-msgs                        0.13.14-1focal.20230606.040425       arm64        Small lib to transform sensor_msgs with tf.
+ii  ros-foxy-tf2-tools                              0.13.14-1focal.20230606.040506       arm64        tf2_tools
+ii  ros-foxy-tinyxml-vendor                         0.8.2-1focal.20230527.035859         arm64        CMake shim over the tinxml library.
+ii  ros-foxy-tinyxml2-vendor                        0.7.4-1focal.20230527.035815         arm64        Wrapper around tinyxml2, providing nothing but a dependency on tinyxml2, on some systems.
+ii  ros-foxy-tracetools                             1.0.5-2focal.20230527.050452         arm64        Tracing wrapper for ROS 2.
+ii  ros-foxy-trajectory-msgs                        2.0.5-1focal.20230527.060805         arm64        A package containing some robot trajectory message definitions.
+ii  ros-foxy-uncrustify-vendor                      1.4.0-1focal.20230527.034120         arm64        Wrapper around uncrustify, providing nothing but a dependency on uncrustify, on some systems.
+ii  ros-foxy-unique-identifier-msgs                 2.1.3-1focal.20230527.053240         arm64        ROS messages for universally unique identifiers.
+ii  ros-foxy-urdf                                   2.4.0-2focal.20230527.050713         arm64        This package contains a C++ parser for the Unified Robot Description Format (URDF), which is an XML format for representing a robot model.
+ii  ros-foxy-urdfdom                                2.3.3-1focal.20230527.045357         arm64        A library to access URDFs using the DOM model.
+ii  ros-foxy-urdfdom-headers                        1.0.5-1focal.20230527.033739         arm64        C++ headers for URDF.
+ii  ros-foxy-visualization-msgs                     2.0.5-1focal.20230527.061156         arm64        A package containing some visualization and interaction related message definitions.
+ii  ros-foxy-yaml-cpp-vendor                        7.0.3-1focal.20230527.040053         arm64        Wrapper around yaml-cpp, it provides a fixed CMake module and an ExternalProject build of it.
+ii  ros-foxy-zstd-vendor                            0.3.11-1focal.20230531.175008        arm64        Zstd compression vendor package, providing a dependency for Zstd.
+
+=== PYTHON PACKAGES (ROS-RELATED) ===
+colcon-ros                           0.5.0
+launch-ros                           0.11.7
+launch-testing-ros                   0.11.7
+numpy                                1.24.4
+pandas                               0.25.3
+ros2action                           0.9.13
+ros2bag                              0.3.11
+ros2cli                              0.9.13
+ros2component                        0.9.13
+ros2doctor                           0.9.13
+ros2interface                        0.9.13
+ros2launch                           0.11.7
+ros2lifecycle                        0.9.13
+ros2multicast                        0.9.13
+ros2node                             0.9.13
+ros2param                            0.9.13
+ros2pkg                              0.9.13
+ros2run                              0.9.13
+ros2service                          0.9.13
+ros2topic                            0.9.13
+rosdep                               0.25.1
+rosdep-modules                       0.25.1
+rosdistro                            1.0.1
+rosdistro-modules                    1.0.1
+rosidl-runtime-py                    0.9.1
+rospkg-modules                       1.6.0
+sros2                                0.9.5
+torch                                1.11.0
+torchvision                          0.12.0
+
+=== ALL PYTHON PACKAGES ===
+Package                              Version
+------------------------------------ --------------------
+absl-py                              2.3.1
+ament-copyright                      0.9.8
+ament-cppcheck                       0.9.8
+ament-cpplint                        0.9.8
+ament-flake8                         0.9.8
+ament-index-python                   1.1.0
+ament-lint                           0.9.8
+ament-lint-cmake                     0.9.8
+ament-package                        0.9.5
+ament-pep257                         0.9.8
+ament-uncrustify                     0.9.8
+ament-xmllint                        0.9.8
+apturl                               0.5.2
+argcomplete                          1.8.1
+asttokens                            3.0.0
+atomicwrites                         1.1.5
+attrs                                19.3.0
+autobahn                             17.10.1
+Automat                              0.8.0
+backcall                             0.2.0
+bcrypt                               3.1.7
+beautifulsoup4                       4.8.2
+blinker                              1.4
+bloom                                0.12.0
+breezy                               3.0.2
+Brlapi                               0.7.0
+cachetools                           5.5.2
+car-bringup                          0.0.0
+car-description                      0.0.0
+car-drivers                          0.0.0
+car-inference                        0.0.0
+car-perception                       0.0.0
+car-teleop                           0.0.0
+car-web-streamer                     1.0.0
+catkin-pkg                           1.0.0
+catkin-pkg-modules                   1.0.0
+cbor                                 1.0.0
+certifi                              2025.6.15
+chardet                              3.0.4
+charset-normalizer                   3.4.2
+Click                                7.0
+colcon-argcomplete                   0.3.3
+colcon-bash                          0.5.0
+colcon-cd                            0.2.1
+colcon-cmake                         0.2.29
+colcon-common-extensions             0.3.0
+colcon-core                          0.19.0
+colcon-defaults                      0.2.9
+colcon-devtools                      0.3.0
+colcon-installed-package-information 0.2.1
+colcon-library-path                  0.2.1
+colcon-metadata                      0.2.5
+colcon-mixin                         0.2.3
+colcon-notification                  0.3.0
+colcon-output                        0.2.13
+colcon-override-check                0.0.1
+colcon-package-information           0.4.0
+colcon-package-selection             0.2.10
+colcon-parallel-executor             0.3.0
+colcon-pkg-config                    0.1.0
+colcon-powershell                    0.4.0
+colcon-python-setup-py               0.2.9
+colcon-recursive-crawl               0.2.3
+colcon-ros                           0.5.0
+colcon-test-result                   0.3.8
+colcon-zsh                           0.5.0
+colorama                             0.4.3
+comm                                 0.2.2
+configobj                            5.0.6
+constantly                           15.1.0
+cov-core                             1.15.0
+coverage                             4.5.2
+cryptography                         2.8
+cupshelpers                          1.0
+cycler                               0.10.0
+Cython                               0.29.14
+data-collect                         1.0.0
+dbus-python                          1.2.16
+debugpy                              1.8.14
+decorator                            4.4.2
+defer                                1.0.6
+Deprecated                           1.2.7
+distlib                              0.3.0
+distro                               1.4.0
+distro-info                          0.23+ubuntu1.1
+docutils                             0.16
+domain-coordinator                   0.9.2
+dulwich                              0.19.15
+duplicity                            0.8.12.0
+empy                                 3.3.2
+entrypoints                          0.3
+executing                            2.2.0
+fasteners                            0.14.1
+fastimport                           0.9.8
+filelock                             3.16.1
+flake8                               3.7.9
+fsspec                               2025.3.0
+future                               0.18.2
+google-auth                          2.40.3
+google-auth-oauthlib                 0.4.6
+gpg                                  1.13.1
+graphsurgeon                         0.4.6
+grpcio                               1.70.0
+html5lib                             1.0.1
+httplib2                             0.14.0
+hyperlink                            19.0.0
+idna                                 3.10
+ifcfg                                0.18
+importlib_metadata                   8.5.0
+incremental                          16.10.1
+ipykernel                            6.29.5
+ipython                              8.12.3
+jedi                                 0.19.2
+jetcam                               0.0.0
+Jetson.GPIO                          2.1.6
+jetson-stats                         4.3.2
+Jinja2                               3.1.6
+jupyter_client                       8.6.3
+jupyter_core                         5.8.1
+keyring                              18.0.1
+kiwisolver                           1.0.1
+language-selector                    0.1
+lark-parser                          0.8.1
+launch                               0.10.10
+launch-ros                           0.11.7
+launch-testing                       0.10.10
+launch-testing-ros                   0.11.7
+launch-xml                           0.10.10
+launch-yaml                          0.10.10
+launchpadlib                         1.10.13
+lazr.restfulclient                   0.14.2
+lazr.uri                             1.0.3
+lockfile                             0.12.2
+louis                                3.12.0
+lxml                                 4.5.0
+lz4                                  3.0.2+dfsg
+macaroonbakery                       1.3.1
+Mako                                 1.1.0
+Markdown                             3.7
+MarkupSafe                           2.1.5
+matplotlib                           3.1.2
+matplotlib-inline                    0.1.7
+mccabe                               0.6.1
+mock                                 3.0.5
+monotonic                            1.5
+more-itertools                       4.2.0
+mpi4py                               3.0.3
+mpmath                               1.3.0
+nest-asyncio                         1.6.0
+netifaces                            0.10.4
+networkx                             3.1
+nose2                                0.9.1
+notify2                              0.3
+numpy                                1.24.4
+oauthlib                             3.3.1
+olefile                              0.46
+onboard                              1.4.1
+onnx-graphsurgeon                    0.3.12
+osrf-pycommon                        0.1.11
+packaging                            21.3
+pandas                               0.25.3
+paramiko                             2.6.0
+parso                                0.8.4
+pbr                                  5.4.5
+pexpect                              4.6.0
+pickleshare                          0.7.5
+Pillow                               7.0.0
+pip                                  25.0.1
+platformdirs                         4.3.6
+pluggy                               0.13.0
+prompt_toolkit                       3.0.51
+protobuf                             3.20.3
+psutil                               5.5.1
+pure_eval                            0.2.3
+py                                   1.8.1
+py-ubjson                            0.14.0
+pyasn1                               0.6.1
+pyasn1_modules                       0.4.2
+pybind11                             2.4.3
+pycairo                              1.16.2
+pycodestyle                          2.5.0
+pycrypto                             2.6.1
+pycups                               1.9.73
+pydocstyle                           2.1.1
+pyflakes                             2.1.1
+PyGithub                             1.43.7
+Pygments                             2.19.2
+PyGObject                            3.36.0
+PyHamcrest                           1.9.0
+PyJWT                                1.7.1
+pymacaroons                          0.13.0
+PyNaCl                               1.3.0
+pyOpenSSL                            19.0.0
+pyparsing                            2.4.6
+pypng                                0.0.20
+PyQRCode                             1.2.1
+PyQt5                                5.14.1
+pyRFC3339                            1.1
+pytest                               4.6.9
+pytest-cov                           2.8.1
+python-apt                           2.0.1+ubuntu0.20.4.1
+python-dateutil                      2.9.0.post0
+python-dbusmock                      0.19
+python-debian                        0.1.36+ubuntu1.1
+python-gitlab                        2.0.1
+python-snappy                        0.5.3
+PyTrie                               0.2
+pytz                                 2019.3
+pyxdg                                0.26
+PyYAML                               5.3.1
+pyzmq                                27.0.0
+requests                             2.32.4
+requests-oauthlib                    2.0.0
+requests-unixsocket                  0.2.0
+roman                                2.0.0
+ros2action                           0.9.13
+ros2bag                              0.3.11
+ros2cli                              0.9.13
+ros2component                        0.9.13
+ros2doctor                           0.9.13
+ros2interface                        0.9.13
+ros2launch                           0.11.7
+ros2lifecycle                        0.9.13
+ros2multicast                        0.9.13
+ros2node                             0.9.13
+ros2param                            0.9.13
+ros2pkg                              0.9.13
+ros2run                              0.9.13
+ros2service                          0.9.13
+ros2topic                            0.9.13
+rosdep                               0.25.1
+rosdep-modules                       0.25.1
+rosdistro                            1.0.1
+rosdistro-modules                    1.0.1
+rosidl-runtime-py                    0.9.1
+rospkg-modules                       1.6.0
+rpyutils                             0.2.0
+rsa                                  4.9.1
+scikit-learn                         1.3.2
+scipy                                1.3.3
+SecretStorage                        2.3.1
+service-identity                     18.1.0
+setuptools                           67.8.0
+simplejson                           3.16.0
+sip                                  4.19.21
+six                                  1.14.0
+smbus2                               0.5.0
+snowballstemmer                      2.0.0
+soupsieve                            1.9.5
+sros2                                0.9.5
+stack-data                           0.6.3
+sympy                                1.13.3
+systemd-python                       234
+tensorboard                          2.8.0
+tensorboard-data-server              0.6.1
+tensorboard-plugin-wit               1.8.1
+tensorrt                             8.5.2.2
+toml                                 0.10.0
+torch                                1.11.0
+torchvision                          0.12.0
+tornado                              6.4.2
+traitlets                            5.14.3
+Twisted                              18.9.0
+txaio                                2.10.0
+typing_extensions                    4.13.2
+u-msgpack-python                     2.1
+ubuntu-drivers-common                0.0.0
+ubuntu-pro-client                    8001
+uff                                  0.6.9
+urllib3                              2.2.3
+urwid                                2.0.1
+vcstool                              0.3.0
+vcstools                             0.1.42
+wadllib                              1.3.3
+wcwidth                              0.1.8
+webencodings                         0.5.1
+Werkzeug                             3.0.6
+wheel                                0.45.1
+wrapt                                1.11.2
+wsaccel                              0.6.2
+xkit                                 0.0.0
+zipp                                 3.20.2
+zope.interface                       4.7.1
+zstandard                            0.23.0
+
+=== ROS ENVIRONMENT VARIABLES ===
+ROS_VERSION=2
+ROS_PYTHON_VERSION=3
+ROS_LOCALHOST_ONLY=0
+ROS_DISTRO=foxy
+
+=== WORKSPACE DEPENDENCIES CHECK ===
+ERROR[car_web_streamer]: Cannot locate rosdep definition for [opencv-python]
+	rosdep key : opencv-python
+	OS name    : ubuntu
+	OS version : focal
+	Data:
+<no data>
+ERROR[data_collect]: Cannot locate rosdep definition for [rosbag2_py]
+	rosdep key : rosbag2_py
+	OS name    : ubuntu
+	OS version : focal
+	Data:
+<no data>
+All system dependencies have been satisfied
+
+=== CUSTOM PACKAGE DEPENDENCIES ===
+
+--- car_bringup dependencies ---
+No dependencies found
+
+--- car_description dependencies ---
+No dependencies found
+
+--- car_drivers dependencies ---
+No dependencies found
+
+--- car_inference dependencies ---
+No dependencies found
+
+--- car_perception dependencies ---
+No dependencies found
+
+--- car_teleop dependencies ---
+No dependencies found
+
+--- car_web_streamer dependencies ---
+No dependencies found
+
+--- data_collect dependencies ---
+No dependencies found
+
+=== ROS2 SYSTEM HEALTH ===
+/opt/ros/foxy/lib/python3.8/site-packages/ros2doctor/api/package.py: 119: UserWarning: Cannot find required versions of packages: data_collect car_web_streamer car_bringup car_perception car_inference car_teleop car_drivers [...] Use `ros2 doctor --report` to see full list.
+/opt/ros/foxy/lib/python3.8/site-packages/ros2doctor/api/platform.py: 82: UserWarning: Distribution foxy is no longer supported or deprecated. To get the latest features, download the new versions at https://index.ros.org/doc/ros2/Installation/
+/opt/ros/foxy/lib/python3.8/site-packages/ros2doctor/api/topic.py: 56: UserWarning: Subscriber without publisher detected on /car/autonomous/enable.
+/opt/ros/foxy/lib/python3.8/site-packages/ros2doctor/api/topic.py: 56: UserWarning: Subscriber without publisher detected on /joy/set_feedback.
+
+All 4 checks passed
+
+
+=== SUMMARY ===
+Total ROS2 packages: 180
+System ROS packages: 180
+Workspace packages: 8
+Python packages: 286
+
+Report saved to: /home/toon/car_ws/ros_dependencies_report.txt
