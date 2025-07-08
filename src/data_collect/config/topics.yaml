@@ -1,0 +1,13 @@
+# Topic configuration for the bag recorder
+core_topics:
+  - {name: '/camera/image_raw', type: 'sensor_msgs/msg/Image', required: true}
+  - {name: '/cmd_vel_manual', type: 'geometry_msgs/msg/Twist', required: true}
+  - {name: '/joy', type: 'sensor_msgs/msg/Joy', required: true}
+
+recording_modes:
+  standard:
+    topics:
+      - /camera/image_raw
+      - /cmd_vel_manual
+      - /joy
+      - /cmd_vel

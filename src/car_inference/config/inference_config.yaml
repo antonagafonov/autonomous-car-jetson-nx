@@ -1,0 +1,46 @@
+# Configuration for car inference nodes
+
+inference_node:
+  ros__parameters:
+    # Model configuration
+    model_path: "/home/toon/train_results/angular_seq10_20250707_003809/checkpoints/best_checkpoint.pth"
+    sequence_length: 10
+    device: "cuda"  # "cuda" or "cpu"
+    
+    # Inference parameters
+    inference_rate: 20.0  # Hz
+    confidence_threshold: 0.1
+    
+    # Image preprocessing
+    use_vertical_crop: false
+    crop_pixels: 100
+    
+    # Safety limits
+    max_angular_velocity: 1.0  # rad/s
+    max_linear_velocity: 0.5   # m/s
+    safety_timeout: 2.0        # seconds
+    
+    # Control
+    enable_autonomous: false   # Start disabled for safety
+
+safety_monitor:
+  ros__parameters:
+    # Safety limits (should match inference node)
+    max_angular_velocity: 1.0  # rad/s
+    max_linear_velocity: 0.5   # m/s
+    min_confidence: 0.1
+    
+    # Timeout thresholds
+    max_no_image_time: 2.0     # seconds
+    max_no_inference_time: 1.0 # seconds
+    
+    # Emergency stop
+    emergency_stop_enabled: true
+
+model_manager:
+  ros__parameters:
+    # Model management
+    models_directory: "/home/toon/car_ws/models"
+    default_model: "best_model.pth"
+    auto_load_latest: true
+    model_validation: true
