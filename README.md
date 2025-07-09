@@ -31,6 +31,10 @@ This project transforms a basic RC car into an intelligent autonomous vehicle us
 - ✅ **Manual Control**: Bluetooth joystick teleoperation with Xbox/PS4 controller support
 - ✅ **🤖 Autonomous Mode**: One-button switching between manual and autonomous control
 - ✅ **🎯 Command Smoothing**: Anti-jerk system for stable autonomous driving
+- ✅ **🔮 Predictive Steering**: Lookahead system for early turn anticipation
+- ✅ **⚡ Burst Control**: Prevents oversteering with manual-like command patterns
+- ✅ **🎛️ Decisive Thresholding**: Binary steering decisions for human-like behavior
+- ✅ **🔄 Asymmetric Turn Control**: Direction-specific parameters to fix overshoot issues
 - ✅ **📊 Smart Model Improvement**: Data augmentation and fine-tuning without retraining
 - ✅ **Motor Control**: Precise PWM-based differential drive control with 4-motor setup
 - ✅ **Camera Integration**: CSI camera with GStreamer hardware acceleration and configurable flip
@@ -250,20 +254,146 @@ ros2 run car_inference inference_node --ros-args \
   -p max_linear_velocity:=1.5 \
   -p max_angular_velocity:=3.0 \
   -p smoothing_alpha:=0.8
+
+# Advanced burst control with predictive steering
+ros2 run car_inference inference_node --ros-args \
+  -p max_linear_velocity:=0.7 \
+  -p max_angular_velocity:=2.0 \
+  -p prediction_skip_count:=2 \
+  -p angular_command_threshold:=0.5 \
+  -p burst_steer_count:=2 \
+  -p burst_zero_count:=3 \
+  -p max_steer_bursts:=5 \
+  -p forced_straight_count:=10
+
+# Fix right turn overshoot with asymmetric parameters
+ros2 run car_inference inference_node --ros-args \
+  -p max_linear_velocity:=0.7 \
+  -p max_angular_velocity:=2.0 \
+  -p prediction_skip_count:=2 \
+  -p angular_command_threshold:=0.5 \
+  -p right_turn_threshold:=0.3 \
+  -p right_turn_skip_count:=1 \
+  -p burst_steer_count:=2 \
+  -p max_steer_bursts:=5
 ```
 
-#### **Command Smoothing Parameters**
+#### **Advanced Inference Parameters**
 
 | Parameter | Range | Description |
 |-----------|-------|-------------|
 | `smoothing_alpha` | 0.0-1.0 | Smoothing strength (0.5=very smooth, 0.9=responsive) |
 | `max_linear_velocity` | 0.1-2.0 | Maximum forward/backward speed (m/s) |
 | `max_angular_velocity` | 0.1-5.0 | Maximum turning speed (rad/s) |
+| `prediction_skip_count` | 0-5 | **Skip first N predictions for lookahead anticipation** |
+| `angular_command_threshold` | 0.0-1.0 | **Zero commands below threshold for decisive steering** |
+| `burst_steer_count` | 1-10 | **Steering commands per burst** |
+| `burst_zero_count` | 1-10 | **Zero commands between steering bursts** |
+| `max_steer_bursts` | 1-20 | **Max steering bursts before forced straight** |
+| `forced_straight_count` | 5-30 | **Commands to force straight after max bursts** |
+| `right_turn_threshold` | 0.0-1.0 | **Lower threshold for right turns (overshoot fix)** |
+| `right_turn_skip_count` | 0-5 | **Different lookahead for right turns** |
+| `command_history_size` | 10-100 | **Commands stored in history for analysis** |
 
-**Recommended smoothing values:**
-- **Learning phase**: `smoothing_alpha:=0.5` (very stable)
-- **Testing phase**: `smoothing_alpha:=0.7` (balanced)
-- **Performance phase**: `smoothing_alpha:=0.9` (responsive)
+**Recommended parameter combinations:**
+
+- **Learning phase**: `smoothing_alpha:=0.5`, `burst_steer_count:=2`, `max_steer_bursts:=3` (very stable)
+- **Testing phase**: `smoothing_alpha:=0.7`, `prediction_skip_count:=2`, `angular_command_threshold:=0.5` (balanced)
+- **Performance phase**: `smoothing_alpha:=0.9`, `prediction_skip_count:=3`, `burst_steer_count:=3` (responsive)
+- **Right turn fix**: `right_turn_threshold:=0.3`, `right_turn_skip_count:=1` (asymmetric tuning)
+
+### 🎯 **Advanced Autonomous Features**
+
+#### **Predictive Lookahead Steering**
+The inference node uses future predictions instead of immediate responses for better corner anticipation:
+
+```bash
+# Use 2-step lookahead for earlier turn initiation
+ros2 run car_inference inference_node --ros-args \
+  -p prediction_skip_count:=2
+
+# Conservative lookahead for testing
+ros2 run car_inference inference_node --ros-args \
+  -p prediction_skip_count:=1
+
+# No lookahead (reactive steering)
+ros2 run car_inference inference_node --ros-args \
+  -p prediction_skip_count:=0
+```
+
+**How it works:**
+```
+Model predictions: [now, +1step, +2step, +3step, ...]
+Skip count = 2:   [SKIP, SKIP,  USE,   USE,   ...]
+Result: Car anticipates turns 2 steps ahead instead of reacting late
+```
+
+#### **Burst Steering Control**
+Prevents oversteering by limiting consecutive steering commands, mimicking manual driving patterns:
+
+```bash
+# Conservative burst control (like manual driving)
+ros2 run car_inference inference_node --ros-args \
+  -p burst_steer_count:=2 \
+  -p burst_zero_count:=3 \
+  -p max_steer_bursts:=5 \
+  -p forced_straight_count:=10
+
+# Pattern: [steer, steer, zero, zero, zero] x5 → [zero, zero, zero...] x10
+```
+
+**Burst control prevents:**
+- Continuous steering that leads to overshoot
+- Oscillatory behavior around corners  
+- Cumulative steering errors
+
+#### **Decisive Command Thresholding**
+Eliminates weak steering commands for more human-like binary decisions:
+
+```bash
+# Decisive steering (either steer or go straight)
+ros2 run car_inference inference_node --ros-args \
+  -p angular_command_threshold:=0.5
+
+# Very decisive (only strong commands pass)
+ros2 run car_inference inference_node --ros-args \
+  -p angular_command_threshold:=0.8
+```
+
+**Effect:**
+```
+Model output: 0.3  → Threshold 0.5 → Result: 0.0 (go straight)
+Model output: 0.7  → Threshold 0.5 → Result: 0.7 (steer decisively)
+```
+
+#### **Asymmetric Turn Handling**
+Fixes right turn overshoot with direction-specific parameters:
+
+```bash
+# More sensitive right turns
+ros2 run car_inference inference_node --ros-args \
+  -p angular_command_threshold:=0.5 \
+  -p right_turn_threshold:=0.3 \
+  -p prediction_skip_count:=2 \
+  -p right_turn_skip_count:=1
+
+# Left turns: 0.5 threshold, 2-step lookahead
+# Right turns: 0.3 threshold, 1-step lookahead
+```
+
+#### **Command History and Analytics**
+Real-time monitoring of steering patterns and statistics:
+
+```bash
+# Monitor burst control effectiveness
+ros2 topic echo /car/burst_stats
+
+# Example output:
+📊 Burst Stats: 200 total, 35.0% steer, 45.0% zero, 20.0% forced straight | 
+Threshold: 45.0% zeroed, 55.0% passed | 
+Turns: 65.0% left (45), 35.0% right (25) | 
+Bursts: 12, Recent steer bursts: 8, Phase: steer, Step: 1
+```
 
 ### 🌐 Web Camera Streaming
 
@@ -679,6 +809,16 @@ ros2 topic pub /autonomous_mode std_msgs/Bool "data: false" --once
 # Start/stop recording programmatically
 ros2 topic pub /recording_trigger std_msgs/Bool "data: true" --once
 ros2 topic pub /recording_trigger std_msgs/Bool "data: false" --once
+
+# Monitor advanced inference statistics
+ros2 topic echo /car/burst_stats
+ros2 topic echo /car/inference_confidence  
+ros2 topic echo /car/angular_prediction
+ros2 topic echo /car/queue_size
+
+# Test burst control and thresholding
+ros2 topic pub /cmd_vel_autonomous geometry_msgs/Twist '{linear: {x: 0.5}, angular: {z: 0.3}}' --once
+ros2 topic pub /cmd_vel_autonomous geometry_msgs/Twist '{linear: {x: 0.5}, angular: {z: 0.8}}' --once
 ```
 
 ## 📡 ROS2 Architecture
@@ -694,6 +834,11 @@ ros2 topic pub /recording_trigger std_msgs/Bool "data: false" --once
 | `/autonomous_mode` | `std_msgs/Bool` | **Current operation mode (manual/autonomous)** |
 | `/camera/image_raw` | `sensor_msgs/Image` | Live camera feed (up to 60fps) |
 | `/recording_trigger` | `std_msgs/Bool` | **Recording state control** |
+| `/car/angular_prediction` | `std_msgs/Float32` | **Raw angular velocity predictions from model** |
+| `/car/inference_confidence` | `std_msgs/Float32` | **Model confidence score (0.0-1.0)** |
+| `/car/burst_stats` | `std_msgs/String` | **Burst control statistics and monitoring** |
+| `/car/queue_size` | `std_msgs/Float32` | **Prediction queue size for lookahead** |
+| `/car/inference_status` | `std_msgs/String` | **Inference node status and debug info** |
 
 ### Nodes
 
@@ -767,15 +912,29 @@ ros2 param set /camera_node flip_method 2
 ### Inference Node Parameters (Autonomous Mode)
 
 ```bash
-# Set maximum velocities
+# Basic parameters
 ros2 param set /inference_node max_linear_velocity 1.0
 ros2 param set /inference_node max_angular_velocity 2.0
-
-# Set command smoothing (0.0-1.0, lower = more smoothing)
 ros2 param set /inference_node smoothing_alpha 0.7
-
-# Set model confidence threshold (if applicable)
 ros2 param set /inference_node confidence_threshold 0.8
+
+# Advanced burst control parameters
+ros2 param set /inference_node burst_steer_count 2
+ros2 param set /inference_node burst_zero_count 3
+ros2 param set /inference_node max_steer_bursts 5
+ros2 param set /inference_node forced_straight_count 10
+
+# Predictive steering parameters
+ros2 param set /inference_node prediction_skip_count 2
+ros2 param set /inference_node angular_command_threshold 0.5
+
+# Right turn overshoot fix parameters
+ros2 param set /inference_node right_turn_threshold 0.3
+ros2 param set /inference_node right_turn_skip_count 1
+
+# History and monitoring parameters
+ros2 param set /inference_node command_history_size 30
+ros2 param set /inference_node steering_threshold 0.1
 ```
 
 ### Web Streaming Parameters
@@ -889,8 +1048,26 @@ ros2 topic echo /autonomous_mode
 # Test command relay switching
 ros2 param get /cmd_relay autonomous_mode
 
-# Monitor smoothed vs raw commands
-ros2 param get /inference_node smoothing_alpha
+# Monitor burst control statistics
+ros2 topic echo /car/burst_stats
+
+# Check prediction queue status
+ros2 topic echo /car/queue_size
+
+# Monitor inference confidence
+ros2 topic echo /car/inference_confidence
+
+# Check command thresholding effects
+ros2 topic echo /car/angular_prediction
+
+# Debug burst control behavior
+ros2 topic echo /car/inference_status
+
+# Monitor specific parameters
+ros2 param get /inference_node prediction_skip_count
+ros2 param get /inference_node angular_command_threshold
+ros2 param get /inference_node burst_steer_count
+ros2 param get /inference_node max_steer_bursts
 ```
 
 ### Joystick Issues
@@ -1043,20 +1220,46 @@ iperf3 -c [robot_ip]  # If iperf3 is installed
 
 ### Autonomous Mode Optimization
 ```bash
-# Conservative mode for learning
+# Conservative mode for learning (stable, predictable)
 ros2 run car_inference inference_node --ros-args \
   -p max_linear_velocity:=0.6 \
-  -p smoothing_alpha:=0.5
+  -p smoothing_alpha:=0.5 \
+  -p prediction_skip_count:=1 \
+  -p angular_command_threshold:=0.3 \
+  -p burst_steer_count:=2 \
+  -p max_steer_bursts:=3 \
+  -p forced_straight_count:=15
 
-# Balanced mode for testing  
+# Balanced mode for testing (good performance)
 ros2 run car_inference inference_node --ros-args \
   -p max_linear_velocity:=1.0 \
-  -p smoothing_alpha:=0.7
+  -p smoothing_alpha:=0.7 \
+  -p prediction_skip_count:=2 \
+  -p angular_command_threshold:=0.5 \
+  -p burst_steer_count:=2 \
+  -p max_steer_bursts:=5 \
+  -p forced_straight_count:=10
 
-# Performance mode for deployment
+# Performance mode for deployment (responsive)
 ros2 run car_inference inference_node --ros-args \
   -p max_linear_velocity:=1.5 \
-  -p smoothing_alpha:=0.9
+  -p smoothing_alpha:=0.9 \
+  -p prediction_skip_count:=3 \
+  -p angular_command_threshold:=0.7 \
+  -p burst_steer_count:=3 \
+  -p max_steer_bursts:=8 \
+  -p forced_straight_count:=8
+
+# Right turn overshoot fix mode
+ros2 run car_inference inference_node --ros-args \
+  -p max_linear_velocity:=0.7 \
+  -p max_angular_velocity:=2.0 \
+  -p prediction_skip_count:=2 \
+  -p angular_command_threshold:=0.5 \
+  -p right_turn_threshold:=0.2 \
+  -p right_turn_skip_count:=1 \
+  -p burst_steer_count:=2 \
+  -p max_steer_bursts:=4
 ```
 
 ## 🚧 Future Roadmap
