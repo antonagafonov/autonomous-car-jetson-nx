@@ -164,6 +164,7 @@ def decode_joy_message(data):
 def save_data_to_csv_and_json(data, fieldnames, data_dir, filename_base, data_type):
     """Save data to both CSV and JSON files with proper fieldname handling"""
     if not data:
+        print(f"⚠️  No data to save for {data_type}")
         return
     
     csv_path = data_dir / f"{filename_base}.csv"
@@ -183,6 +184,48 @@ def save_data_to_csv_and_json(data, fieldnames, data_dir, filename_base, data_ty
         json.dump(data, f, indent=2)
     
     print(f"✅ {data_type} saved ({len(data)} entries)")
+
+def diagnose_image_format(data):
+    """Diagnose the actual image format in the data"""
+    print(f"🔍 Diagnosing image format...")
+    print(f"   Total data length: {len(data)} bytes")
+    
+    # Try different offsets and sizes
+    potential_configs = [
+        {"offset": 56, "size": 921600, "width": 640, "height": 480, "channels": 3},  # Original
+        {"offset": 56, "size": 230400, "width": 320, "height": 240, "channels": 3},  # Current
+        {"offset": 64, "size": 921600, "width": 640, "height": 480, "channels": 3},  # Different offset
+        {"offset": 64, "size": 230400, "width": 320, "height": 240, "channels": 3},  # Different offset
+        {"offset": 72, "size": 921600, "width": 640, "height": 480, "channels": 3},  # Different offset
+        {"offset": 72, "size": 230400, "width": 320, "height": 240, "channels": 3},  # Different offset
+    ]
+    
+    for config in potential_configs:
+        offset = config["offset"]
+        size = config["size"]
+        width = config["width"]
+        height = config["height"]
+        channels = config["channels"]
+        
+        if len(data) >= offset + size:
+            print(f"   ✅ Config possible: offset={offset}, size={size}, {width}x{height}x{channels}")
+            
+            # Try to extract and check if it looks like valid image data
+            img_data = data[offset:offset + size]
+            
+            # Check for reasonable pixel values (0-255)
+            sample_values = img_data[:100]  # Check first 100 bytes
+            valid_pixels = sum(1 for b in sample_values if 0 <= b <= 255)
+            print(f"      Valid pixel ratio: {valid_pixels/100:.2f}")
+            
+            # Check for variation (not all same value)
+            unique_values = len(set(sample_values))
+            print(f"      Unique values in sample: {unique_values}")
+            
+        else:
+            print(f"   ❌ Config impossible: offset={offset}, size={size}, {width}x{height}x{channels} (not enough data)")
+    
+    return None
 
 def extract_complete_data(bag_path):
     print("🎬 Complete ROS Bag Data Extractor")
@@ -251,7 +294,7 @@ def extract_complete_data(bag_path):
         else:
             print(f"⚠️  Topic not found: {topic_name}")
     
-    # Extract Images
+    # Extract Images with detailed debugging
     images_metadata = []
     if topics['/camera/image_raw']:
         print(f"\n📸 Extracting images...")
@@ -259,67 +302,132 @@ def extract_complete_data(bag_path):
                       (topics['/camera/image_raw'],))
         image_messages = cursor.fetchall()
         
-        print(f"📸 Processing {len(image_messages)} images...")
+        print(f"📸 Found {len(image_messages)} image messages...")
         
-        # # Extract using proven format
-        # IMAGE_DATA_OFFSET = 56
-        # IMAGE_SIZE = 921600
-        # WIDTH = 640
-        # HEIGHT = 480
-
-        # FIXED PARAMETERS - Based on diagnostic results
-        IMAGE_DATA_OFFSET = 56      # Header size (was correct)
-        IMAGE_SIZE = 230400         # 320x240x3 (was 921600 for 640x480x3)
-        WIDTH = 320                 # Actual width (was 640)
-        HEIGHT = 240                # Actual height (was 480)
-
-        successful = 0
-        failed = 0
+        if len(image_messages) > 0:
+            # Diagnose the first image to understand format
+            print(f"🔍 Analyzing first image message...")
+            first_timestamp, first_data = image_messages[0]
+            diagnose_image_format(first_data)
         
-        for i, (timestamp, data) in enumerate(image_messages):
-            try:
-                if len(data) >= IMAGE_DATA_OFFSET + IMAGE_SIZE:
-                    # Extract image data
-                    img_data = data[IMAGE_DATA_OFFSET:IMAGE_DATA_OFFSET + IMAGE_SIZE]
-                    img_array = np.frombuffer(img_data, dtype=np.uint8)
-                    img = img_array.reshape((HEIGHT, WIDTH, 3))
-                    
-                    # Create filename
-                    filename = f"image_{i:06d}.png"
-                    filepath = images_dir / filename
-                    
-                    # Write image with error checking
-                    write_success = cv2.imwrite(str(filepath), img)
-                    
-                    if write_success and filepath.exists():
-                        file_size = filepath.stat().st_size
-                        if file_size > 1000:
-                            images_metadata.append({
-                                'filename': filename,
-                                'timestamp': timestamp,
-                                'width': WIDTH,
-                                'height': HEIGHT,
-                                'encoding': 'bgr8',
-                                'frame_id': 'camera_link',
-                                'seq': i,
-                                'file_size': file_size
-                            })
-                            successful += 1
-                            
-                            if (i + 1) % 50 == 0:
-                                print(f"📸 Progress: {successful}/{i+1} images...")
+        # Try multiple configurations
+        configs_to_try = [
+            {"offset": 56, "size": 230400, "width": 320, "height": 240},  # Current config
+            {"offset": 56, "size": 921600, "width": 640, "height": 480},  # Original config
+            {"offset": 64, "size": 230400, "width": 320, "height": 240},  # Different offset
+            {"offset": 72, "size": 230400, "width": 320, "height": 240},  # Different offset
+        ]
+        
+        best_config = None
+        best_success_rate = 0
+        
+        for config in configs_to_try:
+            print(f"\n🧪 Testing config: offset={config['offset']}, {config['width']}x{config['height']}")
+            
+            successful = 0
+            failed = 0
+            
+            # Test first 10 images with this config
+            test_messages = image_messages[:min(10, len(image_messages))]
+            
+            for i, (timestamp, data) in enumerate(test_messages):
+                try:
+                    if len(data) >= config['offset'] + config['size']:
+                        # Extract image data
+                        img_data = data[config['offset']:config['offset'] + config['size']]
+                        img_array = np.frombuffer(img_data, dtype=np.uint8)
+                        img = img_array.reshape((config['height'], config['width'], 3))
+                        
+                        # Create test filename
+                        test_filename = f"test_image_{i:06d}.png"
+                        test_filepath = images_dir / test_filename
+                        
+                        # Write image with error checking
+                        write_success = cv2.imwrite(str(test_filepath), img)
+                        
+                        if write_success and test_filepath.exists():
+                            file_size = test_filepath.stat().st_size
+                            if file_size > 1000:
+                                successful += 1
+                                # Clean up test file
+                                test_filepath.unlink()
+                            else:
+                                failed += 1
                         else:
                             failed += 1
                     else:
                         failed += 1
-                else:
+                        
+                except Exception as e:
                     failed += 1
-                    
-            except Exception as e:
-                print(f"❌ Error processing image {i}: {e}")
-                failed += 1
+            
+            success_rate = successful / len(test_messages) if test_messages else 0
+            print(f"   Success rate: {success_rate:.2f} ({successful}/{len(test_messages)})")
+            
+            if success_rate > best_success_rate:
+                best_success_rate = success_rate
+                best_config = config
         
-        print(f"✅ Images: {successful} successful, {failed} failed")
+        if best_config and best_success_rate > 0:
+            print(f"\n✅ Using best config: offset={best_config['offset']}, {best_config['width']}x{best_config['height']}")
+            
+            # Extract all images with best config
+            successful = 0
+            failed = 0
+            
+            for i, (timestamp, data) in enumerate(image_messages):
+                try:
+                    if len(data) >= best_config['offset'] + best_config['size']:
+                        # Extract image data
+                        img_data = data[best_config['offset']:best_config['offset'] + best_config['size']]
+                        img_array = np.frombuffer(img_data, dtype=np.uint8)
+                        img = img_array.reshape((best_config['height'], best_config['width'], 3))
+                        
+                        # Create filename
+                        filename = f"image_{i:06d}.png"
+                        filepath = images_dir / filename
+                        
+                        # Write image with error checking
+                        write_success = cv2.imwrite(str(filepath), img)
+                        
+                        if write_success and filepath.exists():
+                            file_size = filepath.stat().st_size
+                            if file_size > 1000:
+                                images_metadata.append({
+                                    'filename': filename,
+                                    'timestamp': timestamp,
+                                    'width': best_config['width'],
+                                    'height': best_config['height'],
+                                    'encoding': 'bgr8',
+                                    'frame_id': 'camera_link',
+                                    'seq': i,
+                                    'file_size': file_size
+                                })
+                                successful += 1
+                                
+                                if (i + 1) % 50 == 0:
+                                    print(f"📸 Progress: {successful}/{i+1} images...")
+                            else:
+                                failed += 1
+                        else:
+                            failed += 1
+                    else:
+                        failed += 1
+                        
+                except Exception as e:
+                    print(f"❌ Error processing image {i}: {e}")
+                    failed += 1
+            
+            print(f"✅ Images: {successful} successful, {failed} failed")
+        else:
+            print(f"❌ No working image configuration found!")
+    else:
+        print(f"⚠️  No camera topic found - skipping image extraction")
+    
+    # Debug: Print images_metadata status
+    print(f"\n🔍 Images metadata status: {len(images_metadata)} entries")
+    if len(images_metadata) == 0:
+        print("❌ WARNING: No images extracted! This will cause empty synchronized dataset.")
     
     # Extract CMD_VEL_MANUAL data
     cmd_vel_manual_data = []
@@ -599,10 +707,23 @@ def create_synchronized_dataset(data_dir, images_metadata, cmd_vel_manual_data, 
                               cmd_vel_autonomous_data, angular_prediction_data, 
                               inference_confidence_data, queue_size_data, inference_status_data, joy_data):
     """Create a synchronized dataset matching images with closest commands and inference data"""
-    if not images_metadata:
-        return
     
     print("🔄 Synchronizing data streams...")
+    print(f"   📸 Images available: {len(images_metadata)}")
+    print(f"   🎮 Manual commands available: {len(cmd_vel_manual_data)}")
+    print(f"   🚗 Velocity commands available: {len(cmd_vel_data)}")
+    print(f"   🤖 Autonomous commands available: {len(cmd_vel_autonomous_data)}")
+    print(f"   🔮 Angular predictions available: {len(angular_prediction_data)}")
+    print(f"   📊 Confidence scores available: {len(inference_confidence_data)}")
+    print(f"   📦 Queue sizes available: {len(queue_size_data)}")
+    print(f"   📡 Status messages available: {len(inference_status_data)}")
+    print(f"   🕹️  Joystick inputs available: {len(joy_data)}")
+    
+    if not images_metadata:
+        print("❌ WARNING: No images available - cannot create synchronized dataset!")
+        print("   The synchronized dataset requires images as the primary time reference.")
+        print("   Please check why image extraction failed.")
+        return
     
     synchronized_data = []
     
@@ -706,7 +827,9 @@ def create_synchronized_dataset(data_dir, images_metadata, cmd_vel_manual_data, 
                     sync_entry[f'joy_{key}'] = value
         
         synchronized_data.append(sync_entry)
-    print("synchronized_data created with {} entries".format(len(synchronized_data)))
+    
+    print(f"   ✅ Created {len(synchronized_data)} synchronized entries")
+    
     # Save synchronized dataset with all possible fieldnames
     if synchronized_data:
         # Collect all possible fieldnames
@@ -715,16 +838,21 @@ def create_synchronized_dataset(data_dir, images_metadata, cmd_vel_manual_data, 
             all_sync_fieldnames.update(entry.keys())
         
         sorted_sync_fieldnames = sorted(all_sync_fieldnames)
+        print(f"   📋 Synchronized dataset will have {len(sorted_sync_fieldnames)} columns:")
+        for fieldname in sorted_sync_fieldnames:
+            print(f"      - {fieldname}")
         
         save_data_to_csv_and_json(synchronized_data, sorted_sync_fieldnames, 
                                 data_dir, "synchronized_dataset", "Synchronized dataset")
         
         print(f"   📄 Files: synchronized_dataset.csv, synchronized_dataset.json")
+    else:
+        print("❌ No synchronized data created!")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python3 extract_complete_bag.py <bag_directory>")
-        print("Example: python3 extract_complete_bag.py behavior_20250627_174455")
+        print("Usage: python3 extract_bc_data.py <bag_directory>")
+        print("Example: python3 extract_bc_data.py behavior_20250627_174455")
         sys.exit(1)
     
     bag_path = sys.argv[1]

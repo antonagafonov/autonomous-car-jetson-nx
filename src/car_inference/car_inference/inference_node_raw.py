@@ -51,7 +51,7 @@ class ResNet18AngularRegressor(nn.Module):
     def forward(self, x):
         output = self.resnet18(x)
         return output
-
+    
 class CommandSmoother:
     def __init__(self, alpha=0.7):
         self.alpha = alpha
@@ -68,179 +68,13 @@ class CommandSmoother:
         
         return smooth_linear, smooth_angular
 
-class BurstSteeringController:
-    """Controls steering commands in bursts with history tracking"""
-    
-    def __init__(self, command_history_size=30, burst_steer_count=2, burst_zero_count=3, 
-                 max_steer_bursts=15, forced_straight_count=15, steering_threshold=0.1):
-        
-        # Configuration parameters
-        self.command_history_size = command_history_size
-        self.burst_steer_count = burst_steer_count
-        self.burst_zero_count = burst_zero_count
-        self.max_steer_bursts = max_steer_bursts
-        self.forced_straight_count = forced_straight_count
-        self.steering_threshold = steering_threshold
-        
-        # Command history tracking
-        self.command_history = deque(maxlen=command_history_size)
-        
-        # Burst state tracking
-        self.current_burst_step = 0  # 0 to (burst_steer_count + burst_zero_count - 1)
-        self.in_steer_phase = True   # True during steer commands, False during zero commands
-        self.pending_steer_command = 0.0
-        
-        # Burst counting for forcing straight periods
-        self.recent_steer_bursts = deque(maxlen=max_steer_bursts)  # Track recent bursts
-        self.forced_straight_remaining = 0
-        
-        # Statistics
-        self.total_commands = 0
-        self.total_steer_commands = 0
-        self.total_zero_commands = 0
-        self.total_forced_straight = 0
-        self.burst_count = 0
-        
-    def process(self, linear, angular):
-        """Process command through burst control system"""
-        
-        self.total_commands += 1
-        
-        # Check if we're in forced straight mode
-        if self.forced_straight_remaining > 0:
-            self.forced_straight_remaining -= 1
-            self.total_forced_straight += 1
-            
-            # Add to history
-            final_angular = 0.0
-            self.command_history.append({
-                'linear': linear,
-                'angular': final_angular,
-                'original_angular': angular,
-                'type': 'forced_straight',
-                'timestamp': time.time()
-            })
-            
-            return linear, final_angular
-        
-        # Determine if model wants to steer
-        wants_to_steer = abs(angular) > self.steering_threshold
-        
-        # Update pending command if model wants to steer
-        if wants_to_steer:
-            self.pending_steer_command = angular
-        
-        # Burst logic
-        if self.in_steer_phase:
-            # We're in steering phase of burst
-            if self.current_burst_step < self.burst_steer_count:
-                # Send steering command (either pending or zero if no pending)
-                if abs(self.pending_steer_command) > self.steering_threshold:
-                    final_angular = self.pending_steer_command
-                    command_type = 'burst_steer'
-                    self.total_steer_commands += 1
-                else:
-                    final_angular = 0.0
-                    command_type = 'burst_steer_zero'
-                    self.total_zero_commands += 1
-                
-                self.current_burst_step += 1
-                
-                # Check if steering phase is complete
-                if self.current_burst_step >= self.burst_steer_count:
-                    self.in_steer_phase = False
-                    self.current_burst_step = 0
-                    
-                    # Record this burst (True if it contained any steering)
-                    burst_had_steering = abs(self.pending_steer_command) > self.steering_threshold
-                    self.recent_steer_bursts.append(burst_had_steering)
-                    self.burst_count += 1
-                    
-                    # Clear pending command
-                    self.pending_steer_command = 0.0
-                    
-                    # Check if we need to force straight period
-                    if self._check_force_straight_needed():
-                        self.forced_straight_remaining = self.forced_straight_count
-            else:
-                # This shouldn't happen, but handle gracefully
-                final_angular = 0.0
-                command_type = 'burst_error'
-                self.total_zero_commands += 1
-        
-        else:
-            # We're in zero phase of burst
-            final_angular = 0.0
-            command_type = 'burst_zero'
-            self.total_zero_commands += 1
-            
-            self.current_burst_step += 1
-            
-            # Check if zero phase is complete
-            if self.current_burst_step >= self.burst_zero_count:
-                self.in_steer_phase = True
-                self.current_burst_step = 0
-        
-        # Add to history
-        self.command_history.append({
-            'linear': linear,
-            'angular': final_angular,
-            'original_angular': angular,
-            'type': command_type,
-            'timestamp': time.time()
-        })
-        
-        return linear, final_angular
-    
-    def _check_force_straight_needed(self):
-        """Check if we need to force a straight period"""
-        if len(self.recent_steer_bursts) < self.max_steer_bursts:
-            return False
-        
-        # Count steering bursts in recent history
-        steer_burst_count = sum(self.recent_steer_bursts)
-        
-        # Force straight if too many recent bursts had steering
-        return steer_burst_count >= self.max_steer_bursts
-    
-    def get_statistics(self):
-        """Get current statistics"""
-        if self.total_commands == 0:
-            return {}
-        
-        steer_pct = (self.total_steer_commands / self.total_commands) * 100
-        zero_pct = (self.total_zero_commands / self.total_commands) * 100
-        forced_pct = (self.total_forced_straight / self.total_commands) * 100
-        
-        recent_steer_bursts = sum(self.recent_steer_bursts) if self.recent_steer_bursts else 0
-        
-        return {
-            'total_commands': self.total_commands,
-            'steer_commands': self.total_steer_commands,
-            'zero_commands': self.total_zero_commands,
-            'forced_straight': self.total_forced_straight,
-            'steer_percentage': steer_pct,
-            'zero_percentage': zero_pct,
-            'forced_percentage': forced_pct,
-            'burst_count': self.burst_count,
-            'recent_steer_bursts': recent_steer_bursts,
-            'forced_straight_remaining': self.forced_straight_remaining,
-            'current_phase': 'steer' if self.in_steer_phase else 'zero',
-            'burst_step': self.current_burst_step
-        }
-    
-    def get_recent_commands(self, count=10):
-        """Get recent commands from history"""
-        recent = list(self.command_history)[-count:]
-        return recent
-
 class InferenceNode(Node):
-    """ROS2 node for autonomous car control with burst steering control"""
+    """ROS2 node for autonomous car control using trained neural network with queue-based publishing"""
     
     def __init__(self):
         super().__init__('car_inference_node')
         
-        # Declare existing parameters
+        # Declare parameters
         self.declare_parameter('model_path', '/home/toon/train_results/angular_seq10_20250707_003809/checkpoints/best_checkpoint.pth')
         self.declare_parameter('sequence_length', 10)
         self.declare_parameter('publish_rate', 30.0)  # Hz - rate for publishing from queue
@@ -255,18 +89,7 @@ class InferenceNode(Node):
         self.declare_parameter('enable_autonomous', True)
         self.declare_parameter('device', 'cuda')
         
-        # NEW: Declare burst control parameters
-        self.declare_parameter('command_history_size', 30)     # Size of command history
-        self.declare_parameter('burst_steer_count', 2)         # Steering commands per burst  
-        self.declare_parameter('burst_zero_count', 3)          # Zero commands per burst
-        self.declare_parameter('max_steer_bursts', 15)         # Max steering bursts before forcing straight
-        self.declare_parameter('forced_straight_count', 15)    # Commands to force straight
-        self.declare_parameter('steering_threshold', 0.1)      # Minimum angular to consider steering
-        
-        # NEW: Prediction lookahead parameter
-        self.declare_parameter('prediction_skip_count', 0)     # Skip first N predictions (use future predictions)
-        
-        # Get all parameters
+        # Get parameters
         self.model_path = self.get_parameter('model_path').get_parameter_value().string_value
         self.sequence_length = self.get_parameter('sequence_length').get_parameter_value().integer_value
         self.publish_rate = self.get_parameter('publish_rate').get_parameter_value().double_value
@@ -280,30 +103,7 @@ class InferenceNode(Node):
         self.enable_autonomous = self.get_parameter('enable_autonomous').get_parameter_value().bool_value
         self.device_name = self.get_parameter('device').get_parameter_value().string_value
         self.smoothing_alpha = self.get_parameter('smoothing_alpha').get_parameter_value().double_value
-        
-        # NEW: Get burst control parameters
-        command_history_size = self.get_parameter('command_history_size').get_parameter_value().integer_value
-        burst_steer_count = self.get_parameter('burst_steer_count').get_parameter_value().integer_value
-        burst_zero_count = self.get_parameter('burst_zero_count').get_parameter_value().integer_value
-        max_steer_bursts = self.get_parameter('max_steer_bursts').get_parameter_value().integer_value
-        forced_straight_count = self.get_parameter('forced_straight_count').get_parameter_value().integer_value
-        steering_threshold = self.get_parameter('steering_threshold').get_parameter_value().double_value
-        
-        # NEW: Get prediction lookahead parameter
-        self.prediction_skip_count = self.get_parameter('prediction_skip_count').get_parameter_value().integer_value
-        
-        # Initialize components
         self.command_smoother = CommandSmoother(alpha=self.smoothing_alpha)
-        
-        # NEW: Initialize burst steering controller
-        self.burst_controller = BurstSteeringController(
-            command_history_size=command_history_size,
-            burst_steer_count=burst_steer_count,
-            burst_zero_count=burst_zero_count,
-            max_steer_bursts=max_steer_bursts,
-            forced_straight_count=forced_straight_count,
-            steering_threshold=steering_threshold
-        )
 
         # Initialize device
         if self.device_name == 'cuda' and torch.cuda.is_available():
@@ -331,11 +131,11 @@ class InferenceNode(Node):
         self.queue_lock = threading.Lock()
         
         # Prediction queue - stores angular velocity predictions to be published
-        # Adjust queue size based on skip count
-        effective_sequence_length = max(1, self.sequence_length - self.prediction_skip_count)
-        self.prediction_queue = deque(maxlen=effective_sequence_length)
+        self.prediction_queue = deque(maxlen=self.sequence_length)
         self.queue_confidence = 0.0
         self.last_inference_time = time.time()
+        
+        # Removed predictions_history since we're not smoothing between inference runs
         
         # Create subscribers
         self.image_sub = self.create_subscription(
@@ -359,9 +159,6 @@ class InferenceNode(Node):
         self.status_pub = self.create_publisher(String, '/car/inference_status', 10)
         self.queue_size_pub = self.create_publisher(Float32, '/car/queue_size', 10)
         
-        # NEW: Burst control publishers
-        self.burst_stats_pub = self.create_publisher(String, '/car/burst_stats', 10)
-        
         # Create separate timers for inference and publishing
         self.inference_timer = self.create_timer(
             1.0 / self.inference_rate,
@@ -373,24 +170,16 @@ class InferenceNode(Node):
             self.publish_callback
         )
         
-        # NEW: Timer for burst statistics
-        self.burst_stats_timer = self.create_timer(5.0, self.publish_burst_stats)
-        
         # Status monitoring
         self.inference_count = 0
         self.publish_count = 0
         self.error_count = 0
         
-        self.get_logger().info("Car Inference Node initialized with burst steering control")
+        self.get_logger().info("Car Inference Node initialized with queue-based publishing")
         self.get_logger().info(f"Model path: {self.model_path}")
         self.get_logger().info(f"Sequence length: {self.sequence_length}")
         self.get_logger().info(f"Inference rate: {self.inference_rate} Hz")
         self.get_logger().info(f"Publish rate: {self.publish_rate} Hz")
-        self.get_logger().info(f"🔮 Prediction lookahead: Skip first {self.prediction_skip_count} predictions")
-        self.get_logger().info(f"📊 Effective queue size: {effective_sequence_length} (was {self.sequence_length})")
-        self.get_logger().info(f"Burst control: {burst_steer_count} steer + {burst_zero_count} zero per burst")
-        self.get_logger().info(f"Forced straight: {forced_straight_count} commands after {max_steer_bursts} steer bursts")
-        self.get_logger().info(f"Command history: {command_history_size} commands")
         self.get_logger().info(f"Autonomous mode: {'ENABLED' if self.enable_autonomous else 'DISABLED'}")
         
     def load_model(self):
@@ -540,52 +329,22 @@ class InferenceNode(Node):
             return 0.0
     
     def update_prediction_queue(self, new_predictions, confidence):
-        """Update the prediction queue with future predictions (skipping first N predictions)"""
+        """Update the prediction queue with new predictions, overriding what's left"""
         with self.queue_lock:
-            # Clear existing queue
+            # Clear existing queue and add new predictions
             self.prediction_queue.clear()
             
-            # STEP 1: Apply prediction lookahead - skip first N predictions
-            if self.prediction_skip_count > 0:
-                if len(new_predictions) > self.prediction_skip_count:
-                    # Skip first N predictions, use the "future" predictions
-                    future_predictions = new_predictions[self.prediction_skip_count:]
-                    skipped_info = f"Skipped first {self.prediction_skip_count} predictions"
-                else:
-                    # Safety: if not enough predictions, use all but log warning
-                    future_predictions = new_predictions
-                    skipped_info = f"WARNING: Only {len(new_predictions)} predictions, using all"
-            else:
-                # No skipping, use all predictions
-                future_predictions = new_predictions
-                skipped_info = "No prediction skipping"
+            # Apply safety limits to all predictions
+            safe_predictions = np.clip(new_predictions, -self.max_angular_velocity, self.max_angular_velocity)
             
-            # STEP 2: Apply safety limits to future predictions
-            safe_predictions = np.clip(future_predictions, -self.max_angular_velocity, self.max_angular_velocity)
-            
-            # STEP 3: Add future predictions to queue
+            # Add all predictions to queue
             for pred in safe_predictions:
                 self.prediction_queue.append(float(pred))
             
-            # STEP 4: Update confidence
+            # Update confidence
             self.queue_confidence = confidence
             
-            # STEP 5: Log the lookahead effect
-            self.get_logger().debug(
-                f"Queue updated: {skipped_info}, "
-                f"using {len(safe_predictions)} future predictions, "
-                f"confidence: {confidence:.3f}"
-            )
-            
-            # STEP 6: Detailed debug logging every few updates
-            if hasattr(self, 'inference_count') and self.inference_count % 10 == 0:
-                if self.prediction_skip_count > 0 and len(new_predictions) > self.prediction_skip_count:
-                    skipped_preds = new_predictions[:self.prediction_skip_count]
-                    used_preds = new_predictions[self.prediction_skip_count:self.prediction_skip_count+3]  # Show first 3 used
-                    self.get_logger().info(
-                        f"🔮 Lookahead: Skipped {skipped_preds[:3]} → Using {used_preds} "
-                        f"(queue size: {len(self.prediction_queue)})"
-                    )
+            self.get_logger().debug(f"Queue updated with {len(self.prediction_queue)} predictions, confidence: {confidence:.3f}")
     
     def get_next_prediction(self):
         """Get the next prediction from the queue"""
@@ -687,106 +446,60 @@ class InferenceNode(Node):
             angular_velocity, confidence = self.get_next_prediction()
             
             if angular_velocity is None:
-                # No predictions available, publish stop command with burst control
-                controlled_linear, controlled_angular = self.burst_controller.process(0.0, 0.0)
-                self.publish_command(controlled_linear, controlled_angular, confidence)
+                # No predictions available, publish stop command
+                self.publish_stop_command()
                 return
             
-            # Apply burst control to the prediction
-            controlled_linear, controlled_angular = self.burst_controller.process(
-                self.max_linear_velocity, angular_velocity)
-            
             # Apply smoothing
-            smooth_linear, smooth_angular = self.command_smoother.smooth(controlled_linear, controlled_angular)
+            smooth_linear, smooth_angular = self.command_smoother.smooth(self.max_linear_velocity, angular_velocity)
 
-            # Publish the command
-            self.publish_command(smooth_linear, smooth_angular, confidence)
+            # Create and publish control command
+            cmd_msg = Twist()
+            cmd_msg.linear.x = smooth_linear  # Constant forward speed
+            cmd_msg.angular.z = smooth_angular
+            
+            self.cmd_vel_pub.publish(cmd_msg)
+            
+            # Publish additional info
+            angular_msg = Float32()
+            angular_msg.data = smooth_angular
+            self.angular_prediction_pub.publish(angular_msg)
+            
+            confidence_msg = Float32()
+            confidence_msg.data = confidence
+            self.confidence_pub.publish(confidence_msg)
+            
+            # Publish queue size
+            with self.queue_lock:
+                queue_size = len(self.prediction_queue)
+            queue_size_msg = Float32()
+            queue_size_msg.data = float(queue_size)
+            self.queue_size_pub.publish(queue_size_msg)
             
             self.publish_count += 1
             
             # Log periodic status
-            if self.publish_count % 100 == 0:  # Log every 100 publishes
-                stats = self.burst_controller.get_statistics()
+            if self.publish_count % 100 == 0:  # Log every 100 publishes (5 seconds at 20Hz)
                 self.get_logger().info(
-                    f"Publish #{self.publish_count}: final_angular={smooth_angular:.3f}, "
-                    f"original_angular={angular_velocity:.3f}, confidence={confidence:.3f}, "
-                    f"burst_phase={stats['current_phase']}, forced_remaining={stats['forced_straight_remaining']}"
+                    f"Publish #{self.publish_count}: angular_z={smooth_angular:.3f}, "
+                    f"confidence={confidence:.3f}, queue_size={queue_size}"
                 )
             
         except Exception as e:
             self.get_logger().error(f"Error in publish callback: {e}")
             self.publish_stop_command()
     
-    def publish_command(self, linear, angular, confidence):
-        """Publish command and related topics"""
-        # Create and publish control command
-        cmd_msg = Twist()
-        cmd_msg.linear.x = linear
-        cmd_msg.angular.z = angular
-        
-        self.cmd_vel_pub.publish(cmd_msg)
-        
-        # Publish additional info
-        angular_msg = Float32()
-        angular_msg.data = angular
-        self.angular_prediction_pub.publish(angular_msg)
-        
-        confidence_msg = Float32()
-        confidence_msg.data = confidence
-        self.confidence_pub.publish(confidence_msg)
-        
-        # Publish queue size
-        with self.queue_lock:
-            queue_size = len(self.prediction_queue)
-        queue_size_msg = Float32()
-        queue_size_msg.data = float(queue_size)
-        self.queue_size_pub.publish(queue_size_msg)
-    
     def publish_stop_command(self):
         """Publish stop command for safety"""
-        controlled_linear, controlled_angular = self.burst_controller.process(0.0, 0.0)
-        self.publish_command(controlled_linear, controlled_angular, 0.0)
+        cmd_msg = Twist()
+        cmd_msg.linear.x = 0.0
+        cmd_msg.angular.z = 0.0
+        self.cmd_vel_pub.publish(cmd_msg)
         
         # Publish status
         status_msg = String()
         status_msg.data = "STOPPED - No predictions available"
         self.status_pub.publish(status_msg)
-    
-    def publish_burst_stats(self):
-        """Publish burst control statistics"""
-        try:
-            stats = self.burst_controller.get_statistics()
-            
-            stats_str = (
-                f"Burst Stats: {stats['total_commands']} total, "
-                f"{stats['steer_percentage']:.1f}% steer, "
-                f"{stats['zero_percentage']:.1f}% zero, "
-                f"{stats['forced_percentage']:.1f}% forced straight, "
-                f"Bursts: {stats['burst_count']}, "
-                f"Recent steer bursts: {stats['recent_steer_bursts']}, "
-                f"Phase: {stats['current_phase']}, "
-                f"Step: {stats['burst_step']}, "
-                f"Forced remaining: {stats['forced_straight_remaining']}"
-            )
-            
-            # Publish stats
-            stats_msg = String()
-            stats_msg.data = stats_str
-            self.burst_stats_pub.publish(stats_msg)
-            
-            # Log periodically
-            self.get_logger().info(f"📊 {stats_str}")
-            
-            # Log recent commands for debugging
-            recent_commands = self.burst_controller.get_recent_commands(10)
-            if recent_commands:
-                cmd_types = [cmd['type'] for cmd in recent_commands]
-                cmd_angulars = [f"{cmd['angular']:.2f}" for cmd in recent_commands]
-                self.get_logger().debug(f"Recent commands: {cmd_types}")
-                self.get_logger().debug(f"Recent angulars: {cmd_angulars}")
-            
-        except Exception as e:
-            self.get_logger().error(f"Error publishing burst stats: {e}")
 
 
 def main(args=None):

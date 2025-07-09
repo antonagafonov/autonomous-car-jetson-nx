@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 def extract_images(bag_path):
-    print("🎬 Universal Bag Image Extractor")
+    print("🎬 Universal Bag Image Extractor (FIXED)")
     
     bag_path = Path(bag_path)
     print(f"📁 Input bag: {bag_path}")
@@ -70,11 +70,16 @@ def extract_images(bag_path):
     
     print(f"📸 Processing {len(image_messages)} images...")
     
-    # Extract using proven format
-    IMAGE_DATA_OFFSET = 56
-    IMAGE_SIZE = 921600
-    WIDTH = 640
-    HEIGHT = 480
+    # FIXED PARAMETERS - Based on diagnostic results
+    IMAGE_DATA_OFFSET = 56      # Header size (was correct)
+    IMAGE_SIZE = 230400         # 320x240x3 (was 921600 for 640x480x3)
+    WIDTH = 320                 # Actual width (was 640)
+    HEIGHT = 240                # Actual height (was 480)
+    
+    print(f"🔧 Using parameters:")
+    print(f"   📐 Resolution: {WIDTH}x{HEIGHT}")
+    print(f"   📊 Image size: {IMAGE_SIZE} bytes")
+    print(f"   ⚡ Offset: {IMAGE_DATA_OFFSET} bytes")
     
     images_metadata = []
     successful = 0
@@ -115,10 +120,14 @@ def extract_images(bag_path):
                             print(f"📸 Progress: {successful}/{i+1} images saved...")
                     else:
                         failed += 1
+                        print(f"❌ Image {i}: File too small ({file_size} bytes)")
                 else:
                     failed += 1
+                    print(f"❌ Image {i}: Failed to write")
             else:
                 failed += 1
+                expected_total = IMAGE_DATA_OFFSET + IMAGE_SIZE
+                print(f"❌ Image {i}: Data too small ({len(data)} < {expected_total} bytes)")
                 
         except Exception as e:
             print(f"❌ Error processing image {i}: {e}")
@@ -127,7 +136,7 @@ def extract_images(bag_path):
     conn.close()
     
     print(f"\n✅ Extraction complete!")
-    print(f"   �� Successful: {successful}")
+    print(f"   📸 Successful: {successful}")
     print(f"   ❌ Failed: {failed}")
     if successful + failed > 0:
         print(f"   📊 Success rate: {(successful/(successful+failed)*100):.1f}%")
@@ -163,8 +172,8 @@ def extract_images(bag_path):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python3 extract_any_bag.py <bag_directory>")
-        print("Example: python3 extract_any_bag.py behavior_20250624_185649")
+        print("Usage: python3 extract_fixed.py <bag_directory>")
+        print("Example: python3 extract_fixed.py behavior_20250709_201225")
         sys.exit(1)
     
     bag_path = sys.argv[1]
@@ -178,4 +187,4 @@ if __name__ == "__main__":
         print(f"   📸 Images: {output_dir}/images/")
         print(f"   📊 Metadata: {output_dir}/data/")
     else:
-        print(f"\n❌ No images extracted. Check the bag file.")
+        print(f"\n❌ No images extracted. Check the error messages above.")
